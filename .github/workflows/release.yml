@@ -1,0 +1,55 @@
+name: Release (macOS)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Tag push → release for that tag; manual run → release for app version from tauri.conf.json
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseName: "Movie Subtitles ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}"
+          releaseBody: |
+            Universal macOS build (Apple Silicon + Intel).
+
+            The app is not signed/notarized. If macOS says it is damaged, run:
+            `xattr -cr "/Applications/Movie Subtitles.app"`
+          releaseDraft: false
+          prerelease: false
+          args: --target universal-apple-darwin
