@@ -10,6 +10,7 @@ pub struct Settings {
     pub opensubtitles_api_key: String,
     pub opensubtitles_username: String,
     pub opensubtitles_password: String,
+    pub subdl_api_key: String,
     /// Default subtitle language (ISO 639-1).
     pub language: String,
     pub google_translate_api_key: String,
@@ -23,6 +24,7 @@ impl Default for Settings {
             opensubtitles_api_key: String::new(),
             opensubtitles_username: String::new(),
             opensubtitles_password: String::new(),
+            subdl_api_key: String::new(),
             language: "en".into(),
             google_translate_api_key: String::new(),
             translate_to: "ru".into(),

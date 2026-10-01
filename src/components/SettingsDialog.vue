@@ -42,6 +42,17 @@ async function save() {
         </label>
       </fieldset>
       <fieldset>
+        <legend>SubDL.com</legend>
+        <label>
+          API key <span class="muted">(optional)</span>
+          <input v-model="form.subdlApiKey" autocomplete="off" spellcheck="false" />
+        </label>
+        <p class="muted hint">
+          Second subtitle source, searched together with OpenSubtitles. Get a free key at
+          subdl.com → sign up → profile → API key.
+        </p>
+      </fieldset>
+      <fieldset>
         <legend>Google Cloud Translation</legend>
         <label>
           API key <span class="muted">(optional)</span>

@@ -44,6 +44,7 @@ export interface Settings {
   opensubtitlesApiKey: string;
   opensubtitlesUsername: string;
   opensubtitlesPassword: string;
+  subdlApiKey: string;
   language: string;
   googleTranslateApiKey: string;
   translateTo: string;

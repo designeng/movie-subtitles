@@ -184,8 +184,10 @@ function syncHere(cue: Cue) {
           <div class="grow">
             <div class="release" :title="c.release">{{ c.release || c.title }}</div>
             <div class="muted meta">
-              {{ c.title }}<template v-if="c.year"> ({{ c.year }})</template> · {{ c.language }} ·
-              ⬇ {{ c.downloads.toLocaleString() }}<template v-if="c.fps"> · {{ c.fps }} fps</template>
+              {{ c.title }}<template v-if="c.year"> ({{ c.year }})</template> · {{ c.language }}
+              <template v-if="c.downloads"> · ⬇ {{ c.downloads.toLocaleString() }}</template>
+              <template v-if="c.fps"> · {{ c.fps }} fps</template>
+              · {{ c.provider === "subdl" ? "SubDL" : "OpenSubtitles" }}
               <template v-if="c.hearingImpaired"> · HI</template>
             </div>
           </div>

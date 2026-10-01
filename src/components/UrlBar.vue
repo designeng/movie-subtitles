@@ -50,7 +50,7 @@ async function download() {
         v-model="url"
         class="url"
         type="url"
-        placeholder="Paste a YouTube or VK Video link…"
+        placeholder="Paste video link…"
         :disabled="busy"
         spellcheck="false"
       />

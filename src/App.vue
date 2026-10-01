@@ -29,7 +29,7 @@ const videoSrc = computed(() => (selected.value ? convertFileSrc(selected.value.
 onMounted(async () => {
   [entries.value, settings.value] = await Promise.all([api.listLibrary(), api.getSettings()]);
   if (entries.value.length) await select(entries.value[0]);
-  if (!settings.value.opensubtitlesApiKey) showSettings.value = true;
+  if (!settings.value.opensubtitlesApiKey && !settings.value.subdlApiKey) showSettings.value = true;
   window.addEventListener("keydown", onKey);
 });
 onUnmounted(() => window.removeEventListener("keydown", onKey));

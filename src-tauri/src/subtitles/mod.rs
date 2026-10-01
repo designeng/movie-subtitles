@@ -3,6 +3,7 @@
 pub mod format;
 mod opensubtitles;
 pub mod query;
+mod subdl;
 
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ use crate::error::{msg, Result};
 use crate::settings::Settings;
 
 pub use opensubtitles::OpenSubtitles;
+pub use subdl::SubDl;
 
 #[derive(Debug, Clone)]
 pub struct SubtitleQuery {
@@ -58,12 +60,16 @@ impl Registry {
                 .then(|| (user.to_string(), settings.opensubtitles_password.clone()));
             providers.push(Arc::new(OpenSubtitles::new(key.to_string(), credentials)));
         }
+        let key = settings.subdl_api_key.trim();
+        if !key.is_empty() {
+            providers.push(Arc::new(SubDl::new(key.to_string())));
+        }
         Self { providers }
     }
 
     pub async fn search(&self, query: &SubtitleQuery) -> Result<Vec<SubtitleCandidate>> {
         if self.providers.is_empty() {
-            return Err(msg("No subtitle providers configured. Add an OpenSubtitles API key in Settings."));
+            return Err(msg("No subtitle providers configured. Add an OpenSubtitles or SubDL API key in Settings."));
         }
         let mut all = Vec::new();
         let mut last_err = None;

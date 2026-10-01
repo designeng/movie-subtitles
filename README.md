@@ -1,7 +1,7 @@
 # Movie Subtitles
 
 Tauri 2 + Vue 3 + TypeScript приложение: скачивает фильм с YouTube / VK Video,
-находит субтитры (OpenSubtitles.com), показывает их поверх плеера и позволяет
+находит субтитры (OpenSubtitles.com, SubDL.com), показывает их поверх плеера и позволяет
 вручную сдвигать таймлайн субтитров. Есть перевод субтитров (Google Cloud Translation).
 
 ## Запуск
@@ -16,7 +16,7 @@ pnpm tauri dev
 версия, проверка SHA-256 (см. `src-tauri/src/tools.rs`). Свой бинарник можно
 указать через `MOVIE_SUBTITLES_YT_DLP=/path/to/yt-dlp`.
 
-Ключи API (OpenSubtitles, Google Translate) вводятся в Settings.
+Ключи API (OpenSubtitles, SubDL, Google Translate) вводятся в Settings.
 
 ## Горячие клавиши
 
