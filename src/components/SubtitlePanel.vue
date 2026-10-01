@@ -29,6 +29,12 @@ const results = ref<SubtitleCandidate[]>([]);
 const searching = ref(false);
 const fetchingId = ref<string | null>(null);
 const error = ref("");
+/** Provider failures, shown alongside the results of the providers that worked. */
+const providerErrors = ref<string[]>([]);
+/** Subtitle files already on disk for this movie, other than the loaded ones. */
+const localFiles = ref<string[]>([]);
+const link = ref("");
+const loadingLink = ref(false);
 
 watch(
   () => props.entry.id,
@@ -37,11 +43,32 @@ watch(
     translateError.value = "";
     results.value = [];
     error.value = "";
+    providerErrors.value = [];
+    link.value = "";
     tab.value = props.cues.length ? "lines" : "search";
-    autoSearch();
+    init();
   },
 );
-onMounted(autoSearch);
+onMounted(init);
+
+async function init() {
+  const id = props.entry.id;
+  localFiles.value = [];
+  await refreshLocalFiles();
+  if (id === props.entry.id) autoSearch();
+}
+
+async function refreshLocalFiles() {
+  const id = props.entry.id;
+  try {
+    const found = await api.localSubtitles(id);
+    if (id === props.entry.id) localFiles.value = found;
+  } catch {
+    // Not essential: the search still works.
+  }
+}
+
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 watch(
   () => props.cues.length,
   (n) => {
@@ -56,12 +83,18 @@ async function search() {
   const seq = ++searchSeq;
   searching.value = true;
   error.value = "";
+  providerErrors.value = [];
   results.value = [];
   try {
-    const found = await api.searchSubtitles(query.value, language.value);
+    const report = await api.searchSubtitles(query.value, language.value);
     if (seq !== searchSeq) return;
-    results.value = found;
-    if (!found.length) error.value = "Nothing found. Try a shorter or different title.";
+    results.value = report.candidates;
+    providerErrors.value = report.errors;
+    if (!report.candidates.length && !report.errors.length) {
+      error.value =
+        `No “${language.value}” subtitles for “${query.value.trim()}” on ${report.searched.join(" or ")}. ` +
+        "Try a shorter or different title, or paste a direct link below.";
+    }
   } catch (e) {
     if (seq === searchSeq) error.value = String(e);
   } finally {
@@ -71,7 +104,7 @@ async function search() {
 
 /** Searches by the movie title right away when the movie has no subtitles yet. */
 function autoSearch() {
-  if (!props.entry.subtitlePath && query.value.trim()) {
+  if (!props.entry.subtitlePath && !localFiles.value.length && query.value.trim()) {
     search();
   } else {
     searchSeq++;
@@ -96,12 +129,29 @@ async function openFile() {
     multiple: false,
     filters: [{ name: "Subtitles", extensions: ["srt", "vtt"] }],
   });
-  if (!path) return;
+  if (path) await loadFile(path);
+}
+
+async function loadFile(path: string) {
   error.value = "";
   try {
     emit("loaded", await api.loadSubtitleFile(props.entry.id, path));
+    await refreshLocalFiles();
   } catch (e) {
     error.value = String(e);
+  }
+}
+
+async function loadLink() {
+  loadingLink.value = true;
+  error.value = "";
+  try {
+    emit("loaded", await api.downloadSubtitleUrl(props.entry.id, link.value));
+    link.value = "";
+  } catch (e) {
+    error.value = String(e);
+  } finally {
+    loadingLink.value = false;
   }
 }
 
@@ -109,6 +159,7 @@ async function removeSubtitles() {
   try {
     emit("removed", await api.removeSubtitles(props.entry.id));
     tab.value = "search";
+    await refreshLocalFiles();
   } catch (e) {
     error.value = String(e);
   }
@@ -168,7 +219,7 @@ function syncHere(cue: Cue) {
 
     <div v-if="entry.subtitleLabel" class="current">
       <span class="muted">Loaded:</span>
-      <span class="label" :title="entry.subtitleLabel">{{ entry.subtitleLabel }}</span>
+      <span class="label" :title="entry.subtitlePath ?? entry.subtitleLabel">{{ entry.subtitleLabel }}</span>
       <button class="ghost danger" title="Delete these subtitles" @click="removeSubtitles">✕</button>
     </div>
 
@@ -196,8 +247,20 @@ function syncHere(cue: Cue) {
           {{ searching ? "…" : "Search" }}
         </button>
       </form>
+      <form class="row" @submit.prevent="loadLink">
+        <input v-model="link" class="grow" placeholder="Direct link to .srt / .vtt / .zip" spellcheck="false" />
+        <button type="submit" :disabled="loadingLink || !link.trim()">{{ loadingLink ? "…" : "Load" }}</button>
+      </form>
       <button class="ghost" @click="openFile">Open local .srt / .vtt…</button>
+      <div v-if="localFiles.length" class="on-disk">
+        <div class="muted">Already on disk for this movie:</div>
+        <div v-for="path in localFiles" :key="path" class="row">
+          <span class="grow file" :title="path">{{ fileName(path) }}</span>
+          <button @click="loadFile(path)">Use</button>
+        </div>
+      </div>
       <p v-if="error" class="error">{{ error }}</p>
+      <p v-for="e in providerErrors" :key="e" class="error">{{ e }}</p>
       <ul class="results">
         <li v-for="c in results" :key="`${c.provider}-${c.id}`">
           <div class="grow">
@@ -339,6 +402,17 @@ section {
   align-self: flex-start;
   padding-left: 0;
   color: var(--accent);
+}
+.on-disk {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 ul,
 ol {

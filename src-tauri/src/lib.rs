@@ -82,6 +82,8 @@ pub fn run() {
             commands::search_subtitles,
             commands::fetch_subtitles,
             commands::load_subtitle_file,
+            commands::download_subtitle_url,
+            commands::local_subtitles,
             commands::get_subtitles,
             commands::remove_subtitles,
             commands::set_offset,

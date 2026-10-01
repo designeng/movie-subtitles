@@ -1,7 +1,6 @@
 //! SubDL REST API (https://subdl.com/api-doc). Downloads are ZIP archives.
 
 use std::collections::HashMap;
-use std::io::{Cursor, Read};
 use std::sync::LazyLock;
 
 use async_trait::async_trait;
@@ -9,7 +8,7 @@ use regex::Regex;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
 
-use super::{SubtitleCandidate, SubtitleProvider, SubtitleQuery};
+use super::{unpack, SubtitleCandidate, SubtitleProvider, SubtitleQuery};
 use crate::error::{msg, Result};
 
 const API: &str = "https://api.subdl.com/api/v1/subtitles";
@@ -36,6 +35,10 @@ impl SubDl {
 impl SubtitleProvider for SubDl {
     fn id(&self) -> &'static str {
         ID
+    }
+
+    fn name(&self) -> &'static str {
+        "SubDL"
     }
 
     async fn search(&self, query: &SubtitleQuery) -> Result<Vec<SubtitleCandidate>> {
@@ -92,29 +95,8 @@ impl SubtitleProvider for SubDl {
             return Err(msg(format!("SubDL download failed ({})", resp.status())));
         }
         let bytes = resp.bytes().await?;
-        if !bytes.starts_with(b"PK") {
-            // Not an archive: assume the subtitle file itself.
-            return Ok(bytes.to_vec());
-        }
-        extract_subtitle(&bytes)
+        unpack(bytes.to_vec())
     }
-}
-
-/// Returns the first .srt (or, failing that, .vtt) file in a ZIP archive.
-fn extract_subtitle(zip_bytes: &[u8]) -> Result<Vec<u8>> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(zip_bytes))
-        .map_err(|e| msg(format!("SubDL returned a broken archive: {e}")))?;
-    let names: Vec<String> = archive.file_names().map(str::to_string).collect();
-    let name = [".srt", ".vtt"]
-        .iter()
-        .find_map(|ext| names.iter().find(|n| n.to_lowercase().ends_with(ext)))
-        .ok_or_else(|| msg("SubDL archive has no .srt or .vtt file"))?;
-    let mut file = archive
-        .by_name(name)
-        .map_err(|e| msg(format!("SubDL archive: {e}")))?;
-    let mut out = Vec::new();
-    file.read_to_end(&mut out)?;
-    Ok(out)
 }
 
 #[derive(Deserialize)]
@@ -145,27 +127,4 @@ struct SubtitleItem {
     language: Option<String>,
     #[serde(default)]
     hi: bool,
-}
-
-#[cfg(test)]
-mod tests {
-    use std::io::Write;
-
-    use super::*;
-
-    #[test]
-    fn extracts_srt_from_zip() {
-        let mut buf = Cursor::new(Vec::new());
-        {
-            let mut zip = zip::ZipWriter::new(&mut buf);
-            let opts = zip::write::SimpleFileOptions::default();
-            zip.start_file("readme.txt", opts).unwrap();
-            zip.write_all(b"hello").unwrap();
-            zip.start_file("Movie.2010.srt", opts).unwrap();
-            zip.write_all(b"1\n00:00:01,000 --> 00:00:02,000\nHi\n").unwrap();
-            zip.finish().unwrap();
-        }
-        let out = extract_subtitle(buf.get_ref()).unwrap();
-        assert!(out.starts_with(b"1\n00:00:01"));
-    }
 }

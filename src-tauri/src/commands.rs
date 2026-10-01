@@ -8,7 +8,7 @@ use url::Url;
 use crate::error::{msg, Result};
 use crate::library::{remove_files_with_prefix, LibraryEntry};
 use crate::settings::Settings;
-use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery};
+use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery, SubtitleSearch};
 use crate::translate::{GoogleTranslate, GoogleTranslateFree, Translator};
 use crate::video::{DownloadProgress, VideoProvider, VideoSearchResult};
 use crate::AppState;
@@ -129,7 +129,7 @@ pub async fn search_subtitles(
     state: State<'_, AppState>,
     query: String,
     language: String,
-) -> Result<Vec<SubtitleCandidate>> {
+) -> Result<SubtitleSearch> {
     let registry = state.subtitles.read().unwrap().clone();
     registry.search(&SubtitleQuery { text: query, language }).await
 }
@@ -155,6 +155,58 @@ pub fn load_subtitle_file(
     let bytes = std::fs::read(&path)?;
     let label = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     attach_subtitles(&state, &entry_id, &bytes, label)
+}
+
+/// Downloads subtitles (.srt, .vtt or a ZIP with one) from a direct link.
+#[tauri::command]
+pub async fn download_subtitle_url(
+    state: State<'_, AppState>,
+    entry_id: String,
+    url: String,
+) -> Result<Vec<Cue>> {
+    let url = url.trim();
+    let parsed = Url::parse(url).map_err(|_| msg("Invalid URL"))?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(msg("Only http(s) links are supported"));
+    }
+    let bytes = subtitles::download(url).await?;
+    let label = parsed
+        .path_segments()
+        .and_then(|mut s| s.next_back())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(parsed.host_str().unwrap_or(url))
+        .to_string();
+    attach_subtitles(&state, &entry_id, &bytes, label)
+}
+
+/// Subtitle files already on disk for the entry that are not the loaded ones:
+/// `{id}*.srt|vtt` next to the video or in the subtitles folder.
+#[tauri::command]
+pub fn local_subtitles(state: State<'_, AppState>, entry_id: String) -> Result<Vec<PathBuf>> {
+    let entry = state.library.lock().unwrap().get(&entry_id)?.clone();
+    let mut dirs = vec![state.videos_dir(), state.subtitles_dir()];
+    if let Some(dir) = entry.video_path.parent() {
+        dirs.insert(0, dir.to_path_buf());
+    }
+    dirs.dedup();
+    let mut found = Vec::new();
+    for dir in dirs {
+        let Ok(read_dir) = std::fs::read_dir(&dir) else { continue };
+        for item in read_dir.flatten() {
+            let path = item.path();
+            let name = item.file_name().to_string_lossy().to_lowercase();
+            let is_subtitle = name.ends_with(".srt") || name.ends_with(".vtt");
+            // `{id}.srt`, `{id}.en.srt`, but not `{id}1.srt` of another movie.
+            let ours = name
+                .strip_prefix(&entry.id.to_lowercase())
+                .is_some_and(|rest| rest.starts_with('.'));
+            if is_subtitle && ours && path.is_file() && Some(&path) != entry.subtitle_path.as_ref() {
+                found.push(path);
+            }
+        }
+    }
+    found.sort();
+    Ok(found)
 }
 
 fn attach_subtitles(state: &AppState, entry_id: &str, bytes: &[u8], label: String) -> Result<Vec<Cue>> {

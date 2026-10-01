@@ -15,10 +15,15 @@ use super::{host_matches, DownloadProgress, ProgressFn, VideoInfo, VideoProvider
 use crate::error::{msg, Result};
 use crate::tools;
 
-/// Sort order after resolution. WKWebView plays VP9 and H.264 in MP4, but AV1
-/// only with a hardware decoder (M3+), so AV1 is excluded by `FORMAT` below.
-const FORMAT_SORT_TAIL: &str = "fps,vcodec:vp9,acodec:aac";
-const FORMAT: &str = "bv*[vcodec!^=av01]+ba/b[vcodec!^=av01]/bv*+ba/b";
+/// Sort order after resolution.
+const FORMAT_SORT_TAIL: &str = "fps,vcodec:h264,acodec:aac";
+/// WKWebView plays MP4 files through AVFoundation, which on older macOS (12 and earlier)
+/// decodes neither VP9 nor Opus, and AV1 only with a hardware decoder (M3+). So prefer
+/// H.264 + AAC, then muxed formats of unknown codecs that are not VP9/AV1/Opus (ok.ru's
+/// HLS streams), and fall back to anything only when nothing else exists.
+const FORMAT: &str = "bv*[vcodec~='^(avc|h264)']+ba[acodec~='^(mp4a|aac)']\
+     /b[vcodec!~=?'^(vp|av01)'][acodec!~=?'^(opus|vorbis)']\
+     /bv*[vcodec!^=av01]+ba/b";
 const PROGRESS_TEMPLATE: &str = "download:[dl] %(progress.downloaded_bytes)s %(progress.total_bytes)s \
      %(progress.total_bytes_estimate)s %(progress.speed)s %(progress.eta)s";
 const SEARCH_LIMIT: &str = "20";

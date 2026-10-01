@@ -33,6 +33,14 @@ export interface SubtitleCandidate {
   fps: number | null;
 }
 
+export interface SubtitleSearch {
+  candidates: SubtitleCandidate[];
+  /** Names of the providers that were asked. */
+  searched: string[];
+  /** "Provider: error" for providers that failed. */
+  errors: string[];
+}
+
 export interface VideoSearchResult {
   provider: string;
   url: string;
@@ -77,11 +85,14 @@ export const api = {
   searchVideos: (query: string) => invoke<VideoSearchResult[]>("search_videos", { query }),
   deleteEntry: (id: string) => invoke<void>("delete_entry", { id }),
   searchSubtitles: (query: string, language: string) =>
-    invoke<SubtitleCandidate[]>("search_subtitles", { query, language }),
+    invoke<SubtitleSearch>("search_subtitles", { query, language }),
   fetchSubtitles: (entryId: string, candidate: SubtitleCandidate) =>
     invoke<Cue[]>("fetch_subtitles", { entryId, candidate }),
   loadSubtitleFile: (entryId: string, path: string) =>
     invoke<Cue[]>("load_subtitle_file", { entryId, path }),
+  downloadSubtitleUrl: (entryId: string, url: string) =>
+    invoke<Cue[]>("download_subtitle_url", { entryId, url }),
+  localSubtitles: (entryId: string) => invoke<string[]>("local_subtitles", { entryId }),
   getSubtitles: (entryId: string) => invoke<Cue[] | null>("get_subtitles", { entryId }),
   removeSubtitles: (entryId: string) => invoke<LibraryEntry>("remove_subtitles", { entryId }),
   setOffset: (entryId: string, offsetMs: number) => invoke<void>("set_offset", { entryId, offsetMs }),

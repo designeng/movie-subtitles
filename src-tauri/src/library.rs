@@ -30,10 +30,14 @@ pub struct Library {
 
 impl Library {
     pub fn load(path: &Path) -> Self {
-        let entries = std::fs::read(path)
+        let mut entries: Vec<LibraryEntry> = std::fs::read(path)
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
+        // Picks up improvements to the title cleanup for older entries.
+        for e in &mut entries {
+            e.search_query = crate::subtitles::query::from_title(&e.title);
+        }
         Self { path: path.to_path_buf(), entries }
     }
 

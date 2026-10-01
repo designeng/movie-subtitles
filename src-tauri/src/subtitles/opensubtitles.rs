@@ -57,6 +57,10 @@ impl SubtitleProvider for OpenSubtitles {
         ID
     }
 
+    fn name(&self) -> &'static str {
+        "OpenSubtitles"
+    }
+
     async fn search(&self, query: &SubtitleQuery) -> Result<Vec<SubtitleCandidate>> {
         // The API redirects unless parameters are lowercase and alphabetically sorted.
         let params = [

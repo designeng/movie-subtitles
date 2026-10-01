@@ -12,11 +12,16 @@ static NOISE_RE: LazyLock<Regex> = LazyLock::new(|| {
     )
     .unwrap()
 });
+/// Pipes, bullets and emoji usually separate the title from a channel name or tags.
+static SEPARATOR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[|•\p{So}]").unwrap());
 static SPACE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap());
 
 pub fn from_title(title: &str) -> String {
-    // "Movie (2010) | Channel" -> keep the part before the first pipe.
-    let head = title.split(['|', '•']).next().unwrap_or(title);
+    // "Movie (2010) | Channel" -> keep the first non-empty part.
+    let head = SEPARATOR_RE
+        .split(title)
+        .find(|part| part.chars().any(char::is_alphanumeric))
+        .unwrap_or(title);
     let s = BRACKETS_RE.replace_all(head, " ");
     let s = NOISE_RE.replace_all(&s, " ");
     let s = SPACE_RE.replace_all(&s, " ");
@@ -37,5 +42,7 @@ mod tests {
         assert_eq!(from_title("Inception (2010) Full Movie HD 1080p | Movies"), "Inception");
         assert_eq!(from_title("Mission: Impossible - Fallout [4K]"), "Mission: Impossible - Fallout");
         assert_eq!(from_title("(2010)"), "(2010)");
+        assert_eq!(from_title("Breaking Away (1979) (1080p)🌻 Movies"), "Breaking Away");
+        assert_eq!(from_title("🎬 Heat (1995)"), "Heat");
     }
 }

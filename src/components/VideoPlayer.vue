@@ -15,6 +15,17 @@ const emit = defineEmits<{ time: [ms: number]; toggleFullscreen: [] }>();
 
 const video = ref<HTMLVideoElement>();
 const timeMs = ref(0);
+const playError = ref("");
+
+function onError() {
+  const err = video.value?.error;
+  if (!err) return;
+  playError.value =
+    err.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED || err.code === MediaError.MEDIA_ERR_DECODE
+      ? "This video can't be played: its codec (for example VP9 or Opus) isn't supported by this version of macOS. " +
+        "Delete it from the library and download it again; the app now picks a compatible format."
+      : `This video can't be played${err.message ? `: ${err.message}` : ""}. The file may be missing or damaged.`;
+}
 
 const visible = computed(() =>
   activeCues(props.cues, timeMs.value, props.offsetMs).map((i) => {
@@ -51,6 +62,7 @@ watch(
   () => props.src,
   () => {
     timeMs.value = 0;
+    playError.value = "";
     emit("time", 0);
   },
 );
@@ -82,7 +94,9 @@ defineExpose({
       @ended="stop"
       @seeked="stop"
       @loadedmetadata="stop"
+      @error="onError"
     />
+    <div v-if="playError" class="play-error">{{ playError }}</div>
     <div class="subtitles">
       <template v-for="line in visible" :key="line.key">
         <p v-if="line.original">{{ line.original }}</p>
@@ -104,6 +118,16 @@ video {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+.play-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: #ff8a80;
+  background: rgba(0, 0, 0, 0.75);
 }
 .subtitles {
   position: absolute;
