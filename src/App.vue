@@ -183,7 +183,7 @@ function onKey(e: KeyboardEvent) {
           <SyncControls v-if="!fullscreen" v-model="offsetMs" :disabled="!cues.length" @export="exportSrt" />
         </template>
         <div v-else class="placeholder muted">
-          <p>Paste a YouTube or VK Video link above to download a movie.</p>
+          <p>Paste video link above to download a movie.</p>
         </div>
       </section>
       <SubtitlePanel

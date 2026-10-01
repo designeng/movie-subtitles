@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import { ask } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, type LibraryEntry } from "../api";
 
 defineProps<{ entries: LibraryEntry[]; selectedId: string | null }>();
 const emit = defineEmits<{ select: [entry: LibraryEntry]; deleted: [id: string]; error: [message: string] }>();
+
+async function reveal(entry: LibraryEntry) {
+  try {
+    await revealItemInDir(entry.videoPath);
+  } catch (e) {
+    emit("error", String(e));
+  }
+}
 
 async function remove(entry: LibraryEntry) {
   const confirmed = await ask(`Delete "${entry.title}"?\n\nThe video file, any partial downloads and the subtitles will be removed from disk.`, {
@@ -38,6 +47,7 @@ async function remove(entry: LibraryEntry) {
             {{ entry.provider }} · {{ entry.subtitleLabel ? "subtitles" : "no subtitles" }}
           </div>
         </div>
+        <button class="ghost" title="Show in Finder" @click.stop="reveal(entry)">⌕</button>
         <button class="ghost danger" title="Delete movie and subtitles" @click.stop="remove(entry)">✕</button>
       </li>
     </ul>

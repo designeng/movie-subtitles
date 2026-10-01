@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
+import { open } from "@tauri-apps/plugin-dialog";
 import { api, type Settings } from "../api";
 
 const props = defineProps<{ settings: Settings }>();
@@ -7,6 +8,17 @@ const emit = defineEmits<{ close: []; saved: [settings: Settings] }>();
 
 const form = ref<Settings>({ ...props.settings });
 const error = ref("");
+/** Effective folder, shown as a placeholder when the default is used. */
+const defaultVideosDir = ref("");
+
+onMounted(async () => {
+  if (!form.value.videosDir) defaultVideosDir.value = await api.getVideosDir();
+});
+
+async function chooseVideosDir() {
+  const dir = await open({ directory: true, defaultPath: form.value.videosDir || defaultVideosDir.value });
+  if (typeof dir === "string") form.value.videosDir = dir;
+}
 
 async function save() {
   try {
@@ -69,6 +81,16 @@ async function save() {
           <input v-model="form.translateTo" placeholder="ru" />
         </label>
       </fieldset>
+      <fieldset>
+        <legend>Videos folder</legend>
+        <input :value="form.videosDir" :placeholder="defaultVideosDir || 'Default folder (app data)'" readonly :title="form.videosDir || defaultVideosDir" />
+        <div class="folder-actions">
+          <button type="button" @click="chooseVideosDir">Choose…</button>
+          <button type="button" :disabled="!form.videosDir" @click="form.videosDir = ''">Use default</button>
+          <button type="button" class="ghost" @click="api.openVideosDir()">Open in Finder</button>
+        </div>
+        <p class="muted hint">New downloads go here. Already downloaded movies stay where they are.</p>
+      </fieldset>
       <label>
         Default subtitle language
         <input v-model="form.language" placeholder="en" />
@@ -127,6 +149,10 @@ label {
 .hint {
   font-size: 12px;
   margin: 0;
+}
+.folder-actions {
+  display: flex;
+  gap: 8px;
 }
 .actions {
   display: flex;

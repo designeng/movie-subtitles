@@ -36,7 +36,12 @@ impl AppState {
     }
 
     pub fn videos_dir(&self) -> PathBuf {
-        self.data_dir.join("videos")
+        let custom = self.settings.lock().unwrap().videos_dir.trim().to_string();
+        if custom.is_empty() {
+            self.data_dir.join("videos")
+        } else {
+            PathBuf::from(custom)
+        }
     }
 
     pub fn subtitles_dir(&self) -> PathBuf {
@@ -52,7 +57,17 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            app.manage(AppState::new(data_dir));
+            let state = AppState::new(data_dir);
+            // The static assetProtocol scope only covers the default folder; the player also
+            // needs a custom videos folder and wherever earlier downloads were saved.
+            let scope = app.asset_protocol_scope();
+            scope.allow_directory(state.videos_dir(), true)?;
+            for entry in state.library.lock().unwrap().entries() {
+                if let Some(dir) = entry.video_path.parent() {
+                    scope.allow_directory(dir, true)?;
+                }
+            }
+            app.manage(state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -69,6 +84,8 @@ pub fn run() {
             commands::export_subtitles,
             commands::get_settings,
             commands::save_settings,
+            commands::get_videos_dir,
+            commands::open_videos_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

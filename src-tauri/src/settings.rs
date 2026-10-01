@@ -16,6 +16,8 @@ pub struct Settings {
     pub google_translate_api_key: String,
     /// Target language for translated subtitles (ISO 639-1).
     pub translate_to: String,
+    /// Where downloaded videos go; empty means `<app data>/videos`.
+    pub videos_dir: String,
 }
 
 impl Default for Settings {
@@ -28,6 +30,7 @@ impl Default for Settings {
             language: "en".into(),
             google_translate_api_key: String::new(),
             translate_to: "ru".into(),
+            videos_dir: String::new(),
         }
     }
 }

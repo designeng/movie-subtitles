@@ -16,7 +16,8 @@ pnpm tauri dev
 версия, проверка SHA-256 (см. `src-tauri/src/tools.rs`). Свой бинарник можно
 указать через `MOVIE_SUBTITLES_YT_DLP=/path/to/yt-dlp`.
 
-Ключи API (OpenSubtitles, SubDL, Google Translate) вводятся в Settings.
+Ключи API (OpenSubtitles, SubDL, Google Translate) и папка для фильмов задаются в Settings.
+По умолчанию фильмы сохраняются в `~/Library/Application Support/com.savenok.moviesubtitles/videos`.
 
 ## Горячие клавиши
 

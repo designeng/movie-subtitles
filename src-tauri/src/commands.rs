@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use url::Url;
 
 use crate::error::{msg, Result};
@@ -73,6 +73,12 @@ pub async fn download_video(
 /// Removes the movie, any partial download fragments and its subtitles.
 #[tauri::command]
 pub fn delete_entry(state: State<'_, AppState>, id: String) -> Result<()> {
+    // The video may live in a previously configured folder.
+    let saved_dir = state.library.lock().unwrap().get(&id).ok()
+        .and_then(|e| e.video_path.parent().map(PathBuf::from));
+    if let Some(dir) = saved_dir {
+        remove_files_with_prefix(&dir, &id)?;
+    }
     remove_files_with_prefix(&state.videos_dir(), &id)?;
     remove_files_with_prefix(&state.subtitles_dir(), &id)?;
     state.library.lock().unwrap().remove(&id)?;
@@ -208,9 +214,32 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
 }
 
 #[tauri::command]
-pub fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<()> {
+pub fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<()> {
+    let videos_dir = settings.videos_dir.trim();
+    if !videos_dir.is_empty() {
+        let dir = PathBuf::from(videos_dir);
+        if !dir.is_absolute() {
+            return Err(msg("Videos folder must be an absolute path"));
+        }
+        std::fs::create_dir_all(&dir)?;
+        app.asset_protocol_scope()
+            .allow_directory(&dir, true)
+            .map_err(|e| msg(format!("Cannot use videos folder: {e}")))?;
+    }
     settings.save(&state.data_dir.join("settings.json"))?;
     *state.subtitles.write().unwrap() = Arc::new(subtitles::Registry::from_settings(&settings));
     *state.settings.lock().unwrap() = settings;
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_videos_dir(state: State<'_, AppState>) -> PathBuf {
+    state.videos_dir()
+}
+
+#[tauri::command]
+pub fn open_videos_dir(state: State<'_, AppState>) -> Result<()> {
+    let dir = state.videos_dir();
+    std::fs::create_dir_all(&dir)?;
+    tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| msg(e.to_string()))
 }

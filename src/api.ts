@@ -48,6 +48,8 @@ export interface Settings {
   language: string;
   googleTranslateApiKey: string;
   translateTo: string;
+  /** Empty means the default folder inside the app data directory. */
+  videosDir: string;
 }
 
 export type SubtitleMode = "original" | "translation" | "both";
@@ -71,6 +73,8 @@ export const api = {
     invoke<void>("export_subtitles", { entryId, path }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
+  getVideosDir: () => invoke<string>("get_videos_dir"),
+  openVideosDir: () => invoke<void>("open_videos_dir"),
   onDownloadProgress: (cb: (p: DownloadProgress) => void): Promise<UnlistenFn> =>
     listen<DownloadProgress>("download-progress", (e) => cb(e.payload)),
 };
