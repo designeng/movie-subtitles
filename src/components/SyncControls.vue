@@ -44,7 +44,7 @@ function applySeconds() {
     </div>
     <button class="ghost" :disabled="disabled || offset === 0" @click="offset = 0">Reset</button>
     <span class="spacer" />
-    <span class="hint muted"><kbd>G</kbd> earlier · <kbd>H</kbd> later · <kbd>⇧</kbd> ×10</span>
+    <span class="hint muted"><kbd>G</kbd> earlier · <kbd>H</kbd> later · <kbd>⇧</kbd> ×10 · <kbd>−</kbd>/<kbd>+</kbd> text size</span>
     <button :disabled="disabled" title="Save a .srt with the offset applied" @click="emit('export')">
       Export .srt
     </button>

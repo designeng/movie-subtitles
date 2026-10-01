@@ -188,10 +188,19 @@ async function translate() {
 
 const filter = ref("");
 const currentIndex = computed(() => cueIndexAt(props.cues, props.timeMs, props.offsetMs));
+// The list follows the same Original / Translation / Both switch as the video.
+const showOriginal = (i: number) => !props.translations?.[i] || mode.value !== "translation";
+const showTranslation = (i: number) => !!props.translations?.[i] && mode.value !== "original";
 const shown = computed(() => {
   const f = filter.value.trim().toLowerCase();
   const all = props.cues.map((cue, index) => ({ cue, index }));
-  return f ? all.filter(({ cue }) => cue.text.toLowerCase().includes(f)) : all;
+  return f
+    ? all.filter(({ cue, index }) =>
+        [showOriginal(index) && cue.text, showTranslation(index) && props.translations?.[index]].some(
+          (t) => t && t.toLowerCase().includes(f),
+        ),
+      )
+    : all;
 });
 
 const list = ref<HTMLElement>();
@@ -298,8 +307,8 @@ function syncHere(cue: Cue) {
         >
           <span class="time muted">{{ formatTime(cue.startMs + offsetMs) }}</span>
           <span class="text">
-            {{ cue.text }}
-            <span v-if="translations?.[index]" class="tr">{{ translations[index] }}</span>
+            <template v-if="showOriginal(index)">{{ cue.text }}</template>
+            <span v-if="showTranslation(index)" class="tr">{{ translations?.[index] }}</span>
           </span>
           <button class="ghost" title="This line is spoken now — sync to it" @click.stop="syncHere(cue)">⏱</button>
         </li>

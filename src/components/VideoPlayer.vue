@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { Cue, SubtitleMode } from "../api";
 import { activeCues } from "../subtitles";
 
@@ -10,8 +10,10 @@ const props = defineProps<{
   /** Line-by-line translation aligned with `cues`, if requested. */
   translations: string[] | null;
   mode: SubtitleMode;
+  /** Subtitle font size multiplier. */
+  fontScale: number;
 }>();
-const emit = defineEmits<{ time: [ms: number]; toggleFullscreen: [] }>();
+const emit = defineEmits<{ time: [ms: number]; toggleFullscreen: []; fontScale: [delta: number] }>();
 
 const video = ref<HTMLVideoElement>();
 const timeMs = ref(0);
@@ -58,6 +60,31 @@ function stop() {
   cancelAnimationFrame(frame);
 }
 onUnmounted(() => cancelAnimationFrame(frame));
+
+// WebKit ignores `controlslist="nofullscreen"`, and its native fullscreen shows
+// the bare <video> without our subtitle overlay. Leave it right away and use
+// the app's own fullscreen instead.
+type WebkitDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+function onNativeFullscreen() {
+  const doc = document as WebkitDocument;
+  const el = doc.fullscreenElement ?? doc.webkitFullscreenElement;
+  if (!el || el !== video.value) return;
+  if (doc.exitFullscreen) doc.exitFullscreen().catch(() => {});
+  else doc.webkitExitFullscreen?.();
+  emit("toggleFullscreen");
+}
+function onVideoBeginFullscreen() {
+  (video.value as HTMLVideoElement & { webkitExitFullscreen?: () => void })?.webkitExitFullscreen?.();
+  emit("toggleFullscreen");
+}
+onMounted(() => {
+  document.addEventListener("fullscreenchange", onNativeFullscreen);
+  document.addEventListener("webkitfullscreenchange", onNativeFullscreen);
+});
+onUnmounted(() => {
+  document.removeEventListener("fullscreenchange", onNativeFullscreen);
+  document.removeEventListener("webkitfullscreenchange", onNativeFullscreen);
+});
 watch(
   () => props.src,
   () => {
@@ -95,9 +122,15 @@ defineExpose({
       @seeked="stop"
       @loadedmetadata="stop"
       @error="onError"
+      @webkitbeginfullscreen="onVideoBeginFullscreen"
     />
     <div v-if="playError" class="play-error">{{ playError }}</div>
-    <div class="subtitles">
+    <div class="font-size" @dblclick.stop>
+      <button title="Smaller subtitles (−)" @click="emit('fontScale', -0.1)">A−</button>
+      <span>{{ Math.round(fontScale * 100) }}%</span>
+      <button title="Larger subtitles (+)" @click="emit('fontScale', 0.1)">A+</button>
+    </div>
+    <div class="subtitles" :style="{ '--scale': fontScale }">
       <template v-for="line in visible" :key="line.key">
         <p v-if="line.original">{{ line.original }}</p>
         <p v-if="line.translation" class="translation">{{ line.translation }}</p>
@@ -129,6 +162,32 @@ video {
   color: #ff8a80;
   background: rgba(0, 0, 0, 0.75);
 }
+.font-size {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.player:hover .font-size {
+  opacity: 1;
+}
+.font-size span {
+  min-width: 36px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.font-size button {
+  padding: 2px 8px;
+}
 .subtitles {
   position: absolute;
   left: 5%;
@@ -147,7 +206,7 @@ video {
   background: rgba(0, 0, 0, 0.6);
   border-radius: 4px;
   color: #fff;
-  font-size: clamp(16px, 2.6vw, 34px);
+  font-size: calc(clamp(16px, 2.6vw, 34px) * var(--scale, 1));
   line-height: 1.3;
   text-align: center;
   white-space: pre-line;
@@ -155,6 +214,6 @@ video {
 }
 .subtitles p.translation {
   color: #ffe08a;
-  font-size: clamp(14px, 2.2vw, 28px);
+  font-size: calc(clamp(14px, 2.2vw, 28px) * var(--scale, 1));
 }
 </style>

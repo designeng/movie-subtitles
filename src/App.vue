@@ -44,6 +44,15 @@ function startResize(e: PointerEvent) {
 }
 const onWindowResize = () => (sidebarWidth.value = clampSidebar(sidebarWidth.value));
 
+const MIN_FONT_SCALE = 0.5;
+const MAX_FONT_SCALE = 2;
+const fontScale = ref(Number(localStorage.getItem("subtitleFontScale")) || 1);
+function changeFontScale(delta: number) {
+  const next = Math.round((fontScale.value + delta) * 10) / 10;
+  fontScale.value = Math.min(MAX_FONT_SCALE, Math.max(MIN_FONT_SCALE, next));
+  localStorage.setItem("subtitleFontScale", String(fontScale.value));
+}
+
 const mediaBaseUrl = ref("");
 // `addedAt` changes when a movie is downloaded again, so the player doesn't reuse the old file.
 const videoSrc = computed(() =>
@@ -176,6 +185,12 @@ function onKey(e: KeyboardEvent) {
         subtitleMode.value = order[(order.indexOf(subtitleMode.value) + 1) % order.length];
       }
       break;
+    case "Minus":
+      changeFontScale(-0.1);
+      break;
+    case "Equal":
+      changeFontScale(0.1);
+      break;
     case "KeyF":
       toggleFullscreen();
       break;
@@ -212,6 +227,8 @@ function onKey(e: KeyboardEvent) {
             :offset-ms="offsetMs"
             :translations="translations"
             :mode="subtitleMode"
+            :font-scale="fontScale"
+            @font-scale="changeFontScale"
             @time="timeMs = $event"
             @toggle-fullscreen="toggleFullscreen"
           />
