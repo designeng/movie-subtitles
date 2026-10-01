@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_notification::NotificationExt;
 use url::Url;
 
 use crate::error::{msg, Result};
@@ -50,7 +51,16 @@ pub async fn download_video(
             let _ = remove_files_with_prefix(&state.videos_dir(), &id);
         }
     }
+    match &result {
+        Ok(entry) => notify(&app, "Download complete", &entry.title),
+        Err(e) if e.to_string() != CANCELLED => notify(&app, "Download failed", &e.to_string()),
+        Err(_) => {}
+    }
     result
+}
+
+fn notify(app: &AppHandle, title: &str, body: &str) {
+    let _ = app.notification().builder().title(title).body(body).show();
 }
 
 /// Asks the running download to stop.
