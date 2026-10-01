@@ -64,7 +64,7 @@ async function download(url: string) {
     results.value = null;
     emit("downloaded", entry);
   } catch (e) {
-    error.value = String(e);
+    if (String(e) !== "cancelled") error.value = String(e);
   } finally {
     busy.value = false;
     progress.value = null;
@@ -92,6 +92,7 @@ async function download(url: string) {
     <div v-if="busy" class="progress">
       <div class="track"><div class="fill" :style="{ width: `${progress?.percent ?? 0}%` }" /></div>
       <span class="muted">{{ status || "Starting…" }}</span>
+      <button type="button" class="ghost" @click="api.cancelDownload()">Cancel</button>
     </div>
     <div v-if="error" class="error">{{ error }}</div>
     <div v-if="results" class="results">

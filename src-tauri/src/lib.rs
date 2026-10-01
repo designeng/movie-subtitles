@@ -21,6 +21,8 @@ pub struct AppState {
     pub library: Mutex<Library>,
     pub settings: Mutex<Settings>,
     pub subtitles: RwLock<Arc<subtitles::Registry>>,
+    /// Cancels the download in progress, if any.
+    pub cancel_download: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
 }
 
 impl AppState {
@@ -31,6 +33,7 @@ impl AppState {
             library: Mutex::new(Library::load(&data_dir.join("library.json"))),
             subtitles: RwLock::new(Arc::new(subtitles::Registry::from_settings(&settings))),
             settings: Mutex::new(settings),
+            cancel_download: Mutex::new(None),
             data_dir,
         }
     }
@@ -73,6 +76,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_library,
             commands::download_video,
+            commands::cancel_download,
             commands::search_videos,
             commands::delete_entry,
             commands::search_subtitles,

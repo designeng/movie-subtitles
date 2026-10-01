@@ -10,9 +10,11 @@ use crate::library::{remove_files_with_prefix, LibraryEntry};
 use crate::settings::Settings;
 use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery};
 use crate::translate::{GoogleTranslate, GoogleTranslateFree, Translator};
-use crate::video::{DownloadProgress, VideoSearchResult};
+use crate::video::{DownloadProgress, VideoProvider, VideoSearchResult};
 use crate::AppState;
 
+/// Error text of a user-cancelled download; the UI treats it as not an error.
+pub const CANCELLED: &str = "cancelled";
 pub const PROGRESS_EVENT: &str = "download-progress";
 
 #[tauri::command]
@@ -33,9 +35,43 @@ pub async fn download_video(
         let _ = app.emit(PROGRESS_EVENT, p);
     };
 
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    *state.cancel_download.lock().unwrap() = Some(cancel_tx);
+    let current_id = std::sync::Mutex::new(None);
+    let result = tokio::select! {
+        r = download_inner(&state, provider, url, &emit, &current_id) => r,
+        // Dropping the download future kills yt-dlp (`kill_on_drop`).
+        _ = cancel_rx => Err(msg(CANCELLED)),
+    };
+    *state.cancel_download.lock().unwrap() = None;
+    if result.is_err() {
+        // Don't leave fragments of a failed or cancelled download behind.
+        if let Some(id) = current_id.lock().unwrap().take() {
+            let _ = remove_files_with_prefix(&state.videos_dir(), &id);
+        }
+    }
+    result
+}
+
+/// Asks the running download to stop.
+#[tauri::command]
+pub fn cancel_download(state: State<'_, AppState>) {
+    if let Some(tx) = state.cancel_download.lock().unwrap().take() {
+        let _ = tx.send(());
+    }
+}
+
+async fn download_inner(
+    state: &AppState,
+    provider: &dyn VideoProvider,
+    url: &str,
+    emit: &(dyn Fn(DownloadProgress) + Send + Sync),
+    current_id: &std::sync::Mutex<Option<String>>,
+) -> Result<LibraryEntry> {
     emit(DownloadProgress::stage("Reading video info"));
     let info = provider.info(url).await?;
     let id = format!("{}-{}", info.provider, info.id);
+    *current_id.lock().unwrap() = Some(id.clone());
 
     if let Ok(existing) = state.library.lock().unwrap().get(&id) {
         if existing.video_path.is_file() {
@@ -46,14 +82,7 @@ pub async fn download_video(
     let dir = state.videos_dir();
     std::fs::create_dir_all(&dir)?;
     let max_height = state.settings.lock().unwrap().video_quality.max_height();
-    let video_path = match provider.download(url, &dir, &id, max_height, &emit).await {
-        Ok(path) => path,
-        Err(e) => {
-            // Don't leave fragments of a failed download behind.
-            let _ = remove_files_with_prefix(&dir, &id);
-            return Err(e);
-        }
-    };
+    let video_path = provider.download(url, &dir, &id, max_height, emit).await?;
 
     let entry = LibraryEntry {
         id,
