@@ -11,24 +11,51 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use url::Url;
 
-use super::{host_matches, DownloadProgress, ProgressFn, VideoInfo, VideoProvider};
+use super::{host_matches, DownloadProgress, ProgressFn, VideoInfo, VideoProvider, VideoSearchResult};
 use crate::error::{msg, Result};
 use crate::tools;
 
-/// Prefer H.264/AAC: WKWebView can't play VP9/AV1/Opus reliably.
-const FORMAT_SORT: &str = "vcodec:h264,acodec:aac,res:1080";
+/// Sort order after resolution. WKWebView plays VP9 and H.264 in MP4, but AV1
+/// only with a hardware decoder (M3+), so AV1 is excluded by `FORMAT` below.
+const FORMAT_SORT_TAIL: &str = "fps,vcodec:vp9,acodec:aac";
+const FORMAT: &str = "bv*[vcodec!^=av01]+ba/b[vcodec!^=av01]/bv*+ba/b";
 const PROGRESS_TEMPLATE: &str = "download:[dl] %(progress.downloaded_bytes)s %(progress.total_bytes)s \
      %(progress.total_bytes_estimate)s %(progress.speed)s %(progress.eta)s";
+const SEARCH_LIMIT: &str = "20";
 
 pub struct YtDlpProvider {
     id: &'static str,
     hosts: &'static [&'static str],
     bin_dir: PathBuf,
+    /// Search results page URL with a `{query}` placeholder.
+    search_url: Option<&'static str>,
 }
 
 impl YtDlpProvider {
     pub fn new(id: &'static str, hosts: &'static [&'static str], bin_dir: &Path) -> Self {
-        Self { id, hosts, bin_dir: bin_dir.to_path_buf() }
+        Self { id, hosts, bin_dir: bin_dir.to_path_buf(), search_url: None }
+    }
+
+    pub fn with_search(mut self, url_template: &'static str) -> Self {
+        self.search_url = Some(url_template);
+        self
+    }
+
+    fn search_result(&self, entry: &Value) -> Option<VideoSearchResult> {
+        Some(VideoSearchResult {
+            provider: self.id.to_string(),
+            url: entry["url"].as_str()?.to_string(),
+            title: entry["title"].as_str()?.to_string(),
+            channel: entry["channel"].as_str().map(String::from),
+            duration: entry["duration"].as_f64(),
+            views: entry["view_count"].as_u64(),
+            thumbnail: entry["thumbnails"]
+                .as_array()
+                .and_then(|t| t.last())
+                .and_then(|t| t["url"].as_str())
+                .map(String::from),
+            likely_dubbed: false,
+        })
     }
 }
 
@@ -64,17 +91,42 @@ impl VideoProvider for YtDlpProvider {
         })
     }
 
+    async fn search(&self, query: &str) -> Result<Vec<VideoSearchResult>> {
+        let Some(template) = self.search_url else { return Ok(Vec::new()) };
+        let encoded: String = url::form_urlencoded::byte_serialize(query.as_bytes()).collect();
+        let out = Command::new(tools::yt_dlp(&self.bin_dir).await?)
+            .args(["-J", "--flat-playlist", "--no-warnings", "--playlist-end", SEARCH_LIMIT])
+            .arg(template.replace("{query}", &encoded))
+            .output()
+            .await?;
+        if !out.status.success() {
+            return Err(msg(format!(
+                "yt-dlp search failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )));
+        }
+        let v: Value = serde_json::from_slice(&out.stdout)?;
+        let entries = v["entries"].as_array().map(Vec::as_slice).unwrap_or_default();
+        Ok(entries.iter().filter_map(|e| self.search_result(e)).collect())
+    }
+
     async fn download(
         &self,
         url: &str,
         dest_dir: &Path,
         file_prefix: &str,
+        max_height: Option<u32>,
         on_progress: ProgressFn<'_>,
     ) -> Result<PathBuf> {
         on_progress(DownloadProgress::stage("Preparing yt-dlp"));
         let yt_dlp = tools::yt_dlp(&self.bin_dir).await?;
         let ffmpeg = tools::ffmpeg()?;
         let output = dest_dir.join(format!("{file_prefix}.%(ext)s"));
+        // `res:N` prefers the largest resolution not above N, falling back to larger ones.
+        let format_sort = match max_height {
+            Some(h) => format!("res:{h},{FORMAT_SORT_TAIL}"),
+            None => format!("res,{FORMAT_SORT_TAIL}"),
+        };
 
         let mut child = Command::new(yt_dlp)
             .arg("--no-playlist")
@@ -83,7 +135,7 @@ impl VideoProvider for YtDlpProvider {
             .args(["--print", "after_move:[file] %(filepath)s"])
             .args(["--progress-template", PROGRESS_TEMPLATE])
             .args(["--progress-template", "postprocess:[pp] %(progress.postprocessor)s"])
-            .args(["-S", FORMAT_SORT, "-f", "bv*+ba/b", "--merge-output-format", "mp4"])
+            .args(["-S", &format_sort, "-f", FORMAT, "--merge-output-format", "mp4"])
             .arg("--ffmpeg-location")
             .arg(ffmpeg)
             .arg("-o")

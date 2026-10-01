@@ -18,6 +18,29 @@ pub struct Settings {
     pub translate_to: String,
     /// Where downloaded videos go; empty means `<app data>/videos`.
     pub videos_dir: String,
+    pub video_quality: VideoQuality,
+}
+
+/// Upper limit for downloaded video resolution.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VideoQuality {
+    #[default]
+    #[serde(rename = "best")]
+    Best,
+    #[serde(rename = "1080p")]
+    P1080,
+    #[serde(rename = "720p")]
+    P720,
+}
+
+impl VideoQuality {
+    pub fn max_height(self) -> Option<u32> {
+        match self {
+            Self::Best => None,
+            Self::P1080 => Some(1080),
+            Self::P720 => Some(720),
+        }
+    }
 }
 
 impl Default for Settings {
@@ -31,6 +54,7 @@ impl Default for Settings {
             google_translate_api_key: String::new(),
             translate_to: "ru".into(),
             videos_dir: String::new(),
+            video_quality: VideoQuality::Best,
         }
     }
 }

@@ -33,6 +33,19 @@ export interface SubtitleCandidate {
   fps: number | null;
 }
 
+export interface VideoSearchResult {
+  provider: string;
+  url: string;
+  title: string;
+  channel: string | null;
+  /** Seconds. */
+  duration: number | null;
+  views: number | null;
+  thumbnail: string | null;
+  /** The title hints at a dubbed (non-original language) version. */
+  likelyDubbed: boolean;
+}
+
 export interface DownloadProgress {
   stage: string;
   percent: number | null;
@@ -50,13 +63,17 @@ export interface Settings {
   translateTo: string;
   /** Empty means the default folder inside the app data directory. */
   videosDir: string;
+  videoQuality: VideoQuality;
 }
+
+export type VideoQuality = "best" | "1080p" | "720p";
 
 export type SubtitleMode = "original" | "translation" | "both";
 
 export const api = {
   listLibrary: () => invoke<LibraryEntry[]>("list_library"),
   downloadVideo: (url: string) => invoke<LibraryEntry>("download_video", { url }),
+  searchVideos: (query: string) => invoke<VideoSearchResult[]>("search_videos", { query }),
   deleteEntry: (id: string) => invoke<void>("delete_entry", { id }),
   searchSubtitles: (query: string, language: string) =>
     invoke<SubtitleCandidate[]>("search_subtitles", { query, language }),

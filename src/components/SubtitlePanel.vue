@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from "@tauri-apps/plugin-dialog";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { api, type Cue, type LibraryEntry, type SubtitleCandidate, type SubtitleMode } from "../api";
 import { cueIndexAt, formatTime } from "../subtitles";
 
@@ -38,8 +38,10 @@ watch(
     results.value = [];
     error.value = "";
     tab.value = props.cues.length ? "lines" : "search";
+    autoSearch();
   },
 );
+onMounted(autoSearch);
 watch(
   () => props.cues.length,
   (n) => {
@@ -47,15 +49,32 @@ watch(
   },
 );
 
+// Guards against a slow search for a previous movie overwriting the current results.
+let searchSeq = 0;
+
 async function search() {
+  const seq = ++searchSeq;
   searching.value = true;
   error.value = "";
+  results.value = [];
   try {
-    results.value = await api.searchSubtitles(query.value, language.value);
-    if (!results.value.length) error.value = "Nothing found. Try a shorter or different title.";
+    const found = await api.searchSubtitles(query.value, language.value);
+    if (seq !== searchSeq) return;
+    results.value = found;
+    if (!found.length) error.value = "Nothing found. Try a shorter or different title.";
   } catch (e) {
-    error.value = String(e);
+    if (seq === searchSeq) error.value = String(e);
   } finally {
+    if (seq === searchSeq) searching.value = false;
+  }
+}
+
+/** Searches by the movie title right away when the movie has no subtitles yet. */
+function autoSearch() {
+  if (!props.entry.subtitlePath && query.value.trim()) {
+    search();
+  } else {
+    searchSeq++;
     searching.value = false;
   }
 }

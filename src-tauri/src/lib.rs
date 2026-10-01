@@ -73,6 +73,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_library,
             commands::download_video,
+            commands::search_videos,
             commands::delete_entry,
             commands::search_subtitles,
             commands::fetch_subtitles,

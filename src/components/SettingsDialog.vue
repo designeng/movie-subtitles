@@ -82,7 +82,7 @@ async function save() {
         </label>
       </fieldset>
       <fieldset>
-        <legend>Videos folder</legend>
+        <legend>Videos</legend>
         <input :value="form.videosDir" :placeholder="defaultVideosDir || 'Default folder (app data)'" readonly :title="form.videosDir || defaultVideosDir" />
         <div class="folder-actions">
           <button type="button" @click="chooseVideosDir">Choose…</button>
@@ -90,6 +90,15 @@ async function save() {
           <button type="button" class="ghost" @click="api.openVideosDir()">Open in Finder</button>
         </div>
         <p class="muted hint">New downloads go here. Already downloaded movies stay where they are.</p>
+        <label>
+          Max quality
+          <select v-model="form.videoQuality">
+            <option value="best">Best available</option>
+            <option value="1080p">1080p</option>
+            <option value="720p">720p</option>
+          </select>
+        </label>
+        <p class="muted hint">A 2-hour movie in 4K can take 10 GB or more. Applies to new downloads.</p>
       </fieldset>
       <label>
         Default subtitle language

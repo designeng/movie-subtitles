@@ -24,6 +24,27 @@ const fullscreen = ref(false);
 const error = ref("");
 const player = ref<InstanceType<typeof VideoPlayer>>();
 
+const MIN_SIDEBAR = 180;
+const maxSidebar = () => Math.max(MIN_SIDEBAR, Math.floor(window.innerWidth / 3));
+const clampSidebar = (w: number) => Math.min(maxSidebar(), Math.max(MIN_SIDEBAR, w));
+const sidebarWidth = ref(clampSidebar(Number(localStorage.getItem("sidebarWidth")) || 240));
+
+function startResize(e: PointerEvent) {
+  const handle = e.currentTarget as HTMLElement;
+  handle.setPointerCapture(e.pointerId);
+  const move = (ev: PointerEvent) => (sidebarWidth.value = clampSidebar(ev.clientX));
+  const stop = () => {
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", stop);
+    handle.removeEventListener("pointercancel", stop);
+    localStorage.setItem("sidebarWidth", String(sidebarWidth.value));
+  };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", stop);
+  handle.addEventListener("pointercancel", stop);
+}
+const onWindowResize = () => (sidebarWidth.value = clampSidebar(sidebarWidth.value));
+
 const videoSrc = computed(() => (selected.value ? convertFileSrc(selected.value.videoPath) : ""));
 
 onMounted(async () => {
@@ -31,8 +52,12 @@ onMounted(async () => {
   if (entries.value.length) await select(entries.value[0]);
   if (!settings.value.opensubtitlesApiKey && !settings.value.subdlApiKey) showSettings.value = true;
   window.addEventListener("keydown", onKey);
+  window.addEventListener("resize", onWindowResize);
 });
-onUnmounted(() => window.removeEventListener("keydown", onKey));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKey);
+  window.removeEventListener("resize", onWindowResize);
+});
 
 async function select(entry: LibraryEntry) {
   selected.value = entry;
@@ -159,7 +184,7 @@ function onKey(e: KeyboardEvent) {
   <div class="app" :class="{ fullscreen }">
     <UrlBar v-if="!fullscreen" @downloaded="onDownloaded" @open-settings="showSettings = true" />
     <div v-if="error" class="banner error" @click="error = ''">{{ error }} <span class="muted">(click to dismiss)</span></div>
-    <main>
+    <main :style="{ gridTemplateColumns: fullscreen ? '1fr' : `${sidebarWidth}px minmax(0, 1fr) 360px` }">
       <LibraryList
         v-if="!fullscreen"
         :entries="entries"
@@ -168,6 +193,7 @@ function onKey(e: KeyboardEvent) {
         @deleted="onDeleted"
         @error="error = $event"
       />
+      <div v-if="!fullscreen" class="resizer" :style="{ left: sidebarWidth - 3 + 'px' }" @pointerdown.prevent="startResize" />
       <section class="stage">
         <template v-if="selected">
           <VideoPlayer
@@ -183,7 +209,7 @@ function onKey(e: KeyboardEvent) {
           <SyncControls v-if="!fullscreen" v-model="offsetMs" :disabled="!cues.length" @export="exportSrt" />
         </template>
         <div v-else class="placeholder muted">
-          <p>Paste video link above to download a movie.</p>
+          <p>Paste a video link above, or search by the movie's English title to find the original.</p>
         </div>
       </section>
       <SubtitlePanel
@@ -225,10 +251,20 @@ main {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 360px;
+  position: relative;
 }
-.fullscreen main {
-  grid-template-columns: 1fr;
+.resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  touch-action: none;
+}
+.resizer:hover,
+.resizer:active {
+  background: linear-gradient(to right, transparent 1.5px, #fff 1.5px, #fff 4.5px, transparent 4.5px);
 }
 .stage {
   display: flex;

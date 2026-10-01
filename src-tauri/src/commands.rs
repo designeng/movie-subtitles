@@ -10,7 +10,7 @@ use crate::library::{remove_files_with_prefix, LibraryEntry};
 use crate::settings::Settings;
 use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery};
 use crate::translate::{GoogleTranslate, GoogleTranslateFree, Translator};
-use crate::video::DownloadProgress;
+use crate::video::{DownloadProgress, VideoSearchResult};
 use crate::AppState;
 
 pub const PROGRESS_EVENT: &str = "download-progress";
@@ -45,7 +45,8 @@ pub async fn download_video(
 
     let dir = state.videos_dir();
     std::fs::create_dir_all(&dir)?;
-    let video_path = match provider.download(url, &dir, &id, &emit).await {
+    let max_height = state.settings.lock().unwrap().video_quality.max_height();
+    let video_path = match provider.download(url, &dir, &id, max_height, &emit).await {
         Ok(path) => path,
         Err(e) => {
             // Don't leave fragments of a failed download behind.
@@ -68,6 +69,15 @@ pub async fn download_video(
     };
     state.library.lock().unwrap().upsert(entry.clone())?;
     Ok(entry)
+}
+
+#[tauri::command]
+pub async fn search_videos(state: State<'_, AppState>, query: String) -> Result<Vec<VideoSearchResult>> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    state.videos.search(query).await
 }
 
 /// Removes the movie, any partial download fragments and its subtitles.
