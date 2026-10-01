@@ -2,12 +2,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_notification::NotificationExt;
 use url::Url;
 
 use crate::error::{msg, Result};
 use crate::library::{remove_files_with_prefix, LibraryEntry};
+use crate::media_server::MediaServer;
 use crate::settings::Settings;
 use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery, SubtitleSearch};
 use crate::translate::{GoogleTranslate, GoogleTranslateFree, Translator};
@@ -315,7 +316,7 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
 }
 
 #[tauri::command]
-pub fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<()> {
+pub fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<()> {
     let videos_dir = settings.videos_dir.trim();
     if !videos_dir.is_empty() {
         let dir = PathBuf::from(videos_dir);
@@ -323,9 +324,6 @@ pub fn save_settings(app: AppHandle, state: State<'_, AppState>, settings: Setti
             return Err(msg("Videos folder must be an absolute path"));
         }
         std::fs::create_dir_all(&dir)?;
-        app.asset_protocol_scope()
-            .allow_directory(&dir, true)
-            .map_err(|e| msg(format!("Cannot use videos folder: {e}")))?;
     }
     settings.save(&state.data_dir.join("settings.json"))?;
     *state.subtitles.write().unwrap() = Arc::new(subtitles::Registry::from_settings(&settings));
@@ -343,4 +341,10 @@ pub fn open_videos_dir(state: State<'_, AppState>) -> Result<()> {
     let dir = state.videos_dir();
     std::fs::create_dir_all(&dir)?;
     tauri_plugin_opener::open_path(&dir, None::<&str>).map_err(|e| msg(e.to_string()))
+}
+
+/// Base URL under which the player loads library videos: `<base>/<entry id>`.
+#[tauri::command]
+pub fn media_base_url(server: State<'_, MediaServer>) -> String {
+    server.base_url.clone()
 }

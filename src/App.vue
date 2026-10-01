@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { save } from "@tauri-apps/plugin-dialog";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
@@ -45,10 +44,20 @@ function startResize(e: PointerEvent) {
 }
 const onWindowResize = () => (sidebarWidth.value = clampSidebar(sidebarWidth.value));
 
-const videoSrc = computed(() => (selected.value ? convertFileSrc(selected.value.videoPath) : ""));
+const mediaBaseUrl = ref("");
+// `addedAt` changes when a movie is downloaded again, so the player doesn't reuse the old file.
+const videoSrc = computed(() =>
+  selected.value && mediaBaseUrl.value
+    ? `${mediaBaseUrl.value}/${encodeURIComponent(selected.value.id)}?v=${selected.value.addedAt}`
+    : "",
+);
 
 onMounted(async () => {
-  [entries.value, settings.value] = await Promise.all([api.listLibrary(), api.getSettings()]);
+  [entries.value, settings.value, mediaBaseUrl.value] = await Promise.all([
+    api.listLibrary(),
+    api.getSettings(),
+    api.mediaBaseUrl(),
+  ]);
   if (entries.value.length) await select(entries.value[0]);
   if (!settings.value.opensubtitlesApiKey && !settings.value.subdlApiKey) showSettings.value = true;
   window.addEventListener("keydown", onKey);

@@ -20,13 +20,7 @@
       }
     ],
     "security": {
-      "csp": null,
-      "assetProtocol": {
-        "enable": true,
-        "scope": [
-          "$APPDATA/videos/**"
-        ]
-      }
+      "csp": null
     }
   },
   "bundle": {

@@ -80,6 +80,7 @@ export type SubtitleMode = "original" | "translation" | "both";
 
 export const api = {
   listLibrary: () => invoke<LibraryEntry[]>("list_library"),
+  mediaBaseUrl: () => invoke<string>("media_base_url"),
   downloadVideo: (url: string) => invoke<LibraryEntry>("download_video", { url }),
   cancelDownload: () => invoke<void>("cancel_download"),
   searchVideos: (query: string) => invoke<VideoSearchResult[]>("search_videos", { query }),
