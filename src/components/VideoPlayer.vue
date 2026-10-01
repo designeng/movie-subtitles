@@ -59,6 +59,11 @@ function stop() {
   tick();
   cancelAnimationFrame(frame);
 }
+/** After a seek: refresh the time, and keep polling if the video is still playing. */
+function resync() {
+  if (video.value && !video.value.paused) start();
+  else stop();
+}
 onUnmounted(() => cancelAnimationFrame(frame));
 
 // WebKit ignores `controlslist="nofullscreen"`, and its native fullscreen shows
@@ -119,7 +124,7 @@ defineExpose({
       @play="start"
       @pause="stop"
       @ended="stop"
-      @seeked="stop"
+      @seeked="resync"
       @loadedmetadata="stop"
       @error="onError"
       @webkitbeginfullscreen="onVideoBeginFullscreen"
