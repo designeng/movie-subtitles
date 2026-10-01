@@ -12,12 +12,45 @@ const props = defineProps<{
   mode: SubtitleMode;
   /** Subtitle font size multiplier. */
   fontScale: number;
+  /** Playback position to resume from. */
+  startMs: number;
 }>();
-const emit = defineEmits<{ time: [ms: number]; toggleFullscreen: []; fontScale: [delta: number] }>();
+const emit = defineEmits<{ time: [ms: number]; toggleFullscreen: []; fontScale: [delta: number]; position: [ms: number] }>();
 
 const video = ref<HTMLVideoElement>();
 const timeMs = ref(0);
 const playError = ref("");
+
+// Positions are reported only once the saved one has been restored, so a
+// freshly loaded video doesn't overwrite it with 0.
+let restored = false;
+let lastReported = 0;
+function reportPosition() {
+  const v = video.value;
+  if (!restored || !v) return;
+  lastReported = Date.now();
+  emit("position", Math.floor(v.currentTime * 1000));
+}
+function onLoadedMetadata() {
+  const v = video.value;
+  if (v && props.startMs > 0 && props.startMs < (v.duration - 5) * 1000) v.currentTime = props.startMs / 1000;
+  restored = true;
+  stop();
+}
+function onEnded() {
+  stop();
+  // Finished: start from the beginning next time.
+  if (restored) emit("position", 0);
+}
+function onPause() {
+  stop();
+  reportPosition();
+}
+
+function onSeeked() {
+  resync();
+  reportPosition();
+}
 
 function onError() {
   const err = video.value?.error;
@@ -47,6 +80,7 @@ function tick() {
   if (video.value) {
     timeMs.value = video.value.currentTime * 1000;
     emit("time", timeMs.value);
+    if (Date.now() - lastReported > 5000) reportPosition();
   }
   frame = requestAnimationFrame(tick);
 }
@@ -64,7 +98,12 @@ function resync() {
   if (video.value && !video.value.paused) start();
   else stop();
 }
-onUnmounted(() => cancelAnimationFrame(frame));
+onUnmounted(() => {
+  cancelAnimationFrame(frame);
+  reportPosition();
+});
+window.addEventListener("beforeunload", reportPosition);
+onUnmounted(() => window.removeEventListener("beforeunload", reportPosition));
 
 // WebKit ignores `controlslist="nofullscreen"`, and its native fullscreen shows
 // the bare <video> without our subtitle overlay. Leave it right away and use
@@ -93,6 +132,7 @@ onUnmounted(() => {
 watch(
   () => props.src,
   () => {
+    restored = false;
     timeMs.value = 0;
     playError.value = "";
     emit("time", 0);
@@ -122,10 +162,10 @@ defineExpose({
       controlslist="nofullscreen"
       disablepictureinpicture
       @play="start"
-      @pause="stop"
-      @ended="stop"
-      @seeked="resync"
-      @loadedmetadata="stop"
+      @pause="onPause"
+      @ended="onEnded"
+      @seeked="onSeeked"
+      @loadedmetadata="onLoadedMetadata"
       @error="onError"
       @webkitbeginfullscreen="onVideoBeginFullscreen"
     />

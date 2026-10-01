@@ -21,6 +21,9 @@ pub struct LibraryEntry {
     /// Positive values show subtitles later, negative earlier.
     pub offset_ms: i64,
     pub added_at: u64,
+    /// Where playback stopped, so it can resume after a restart.
+    #[serde(default)]
+    pub position_ms: u64,
 }
 
 pub struct Library {

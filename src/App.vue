@@ -67,7 +67,9 @@ onMounted(async () => {
     api.getSettings(),
     api.mediaBaseUrl(),
   ]);
-  if (entries.value.length) await select(entries.value[0]);
+  const lastId = localStorage.getItem("lastEntryId");
+  const last = entries.value.find((e) => e.id === lastId) ?? entries.value[0];
+  if (last) await select(last);
   if (!settings.value.opensubtitlesApiKey && !settings.value.subdlApiKey) showSettings.value = true;
   window.addEventListener("keydown", onKey);
   window.addEventListener("resize", onWindowResize);
@@ -79,6 +81,7 @@ onUnmounted(() => {
 
 async function select(entry: LibraryEntry) {
   selected.value = entry;
+  localStorage.setItem("lastEntryId", entry.id);
   offsetMs.value = entry.offsetMs;
   cues.value = [];
   translations.value = null;
@@ -135,6 +138,12 @@ watch(offsetMs, (ms) => {
     api.setOffset(entry.id, ms).catch((e) => (error.value = String(e)));
   }, 400);
 });
+
+function savePosition(id: string, ms: number) {
+  const entry = entries.value.find((e) => e.id === id);
+  if (entry) entry.positionMs = ms;
+  api.setPosition(id, ms).catch((e) => (error.value = String(e)));
+}
 
 async function exportSrt() {
   const entry = selected.value;
@@ -228,8 +237,10 @@ function onKey(e: KeyboardEvent) {
             :translations="translations"
             :mode="subtitleMode"
             :font-scale="fontScale"
+            :start-ms="selected.positionMs"
             @font-scale="changeFontScale"
             @time="timeMs = $event"
+            @position="savePosition(selected.id, $event)"
             @toggle-fullscreen="toggleFullscreen"
           />
           <SyncControls v-if="!fullscreen" v-model="offsetMs" :disabled="!cues.length" @export="exportSrt" />

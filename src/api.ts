@@ -19,6 +19,8 @@ export interface LibraryEntry {
   /** Positive values show subtitles later, negative earlier. */
   offsetMs: number;
   addedAt: number;
+  /** Where playback stopped. */
+  positionMs: number;
 }
 
 export interface SubtitleCandidate {
@@ -97,6 +99,8 @@ export const api = {
   getSubtitles: (entryId: string) => invoke<Cue[] | null>("get_subtitles", { entryId }),
   removeSubtitles: (entryId: string) => invoke<LibraryEntry>("remove_subtitles", { entryId }),
   setOffset: (entryId: string, offsetMs: number) => invoke<void>("set_offset", { entryId, offsetMs }),
+  setPosition: (entryId: string, positionMs: number) =>
+    invoke<void>("set_position", { entryId, positionMs }),
   translateSubtitles: (entryId: string, target: string) =>
     invoke<string[]>("translate_subtitles", { entryId, target }),
   exportSubtitles: (entryId: string, path: string) =>

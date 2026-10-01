@@ -105,6 +105,7 @@ async fn download_inner(
         subtitle_path: None,
         subtitle_label: None,
         offset_ms: 0,
+        position_ms: 0,
         added_at: SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
     };
     state.library.lock().unwrap().upsert(entry.clone())?;
@@ -262,6 +263,12 @@ pub fn remove_subtitles(state: State<'_, AppState>, entry_id: String) -> Result<
 #[tauri::command]
 pub fn set_offset(state: State<'_, AppState>, entry_id: String, offset_ms: i64) -> Result<()> {
     state.library.lock().unwrap().update(&entry_id, |e| e.offset_ms = offset_ms)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_position(state: State<'_, AppState>, entry_id: String, position_ms: u64) -> Result<()> {
+    state.library.lock().unwrap().update(&entry_id, |e| e.position_ms = position_ms)?;
     Ok(())
 }
 

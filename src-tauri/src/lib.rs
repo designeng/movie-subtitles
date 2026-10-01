@@ -80,6 +80,7 @@ pub fn run() {
             commands::get_subtitles,
             commands::remove_subtitles,
             commands::set_offset,
+            commands::set_position,
             commands::translate_subtitles,
             commands::export_subtitles,
             commands::get_settings,
