@@ -1,6 +1,6 @@
 # Movie Subtitles
 
-Tauri 2 + Vue 3 + TypeScript приложение: скачивает фильм с YouTube / VK Video,
+Tauri 2 + Vue 3 + TypeScript приложение: скачивает фильм с YouTube / VK Video / OK.ru,
 находит субтитры (OpenSubtitles.com, SubDL.com), показывает их поверх плеера и позволяет
 вручную сдвигать таймлайн субтитров. Есть перевод субтитров (Google Cloud Translation).
 
@@ -33,7 +33,7 @@ pnpm tauri dev
 
 ## Структура
 
-- `src-tauri/src/video/` — провайдеры видео (`VideoProvider`), сейчас yt-dlp для YouTube и VK
+- `src-tauri/src/video/` — провайдеры видео (`VideoProvider`), сейчас yt-dlp для YouTube, VK и OK.ru
 - `src-tauri/src/subtitles/` — провайдеры субтитров (`SubtitleProvider`), парсер SRT/VTT
 - `src-tauri/src/translate.rs` — перевод (`Translator`)
 - `src-tauri/src/library.rs` — библиотека фильмов; удаление чистит видео, фрагменты, субтитры и переводы

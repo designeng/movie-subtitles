@@ -91,6 +91,7 @@ impl Registry {
                         .with_search("https://www.youtube.com/results?search_query={query}&sp=EgIYAg%3D%3D"),
                 ),
                 Box::new(YtDlpProvider::new("vk", &["vk.com", "vk.ru", "vkvideo.ru"], bin_dir)),
+                Box::new(YtDlpProvider::new("ok", &["ok.ru", "odnoklassniki.ru"], bin_dir)),
             ],
         }
     }
