@@ -2130,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "movie-subtitles"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "async-trait",
  "encoding_rs",
