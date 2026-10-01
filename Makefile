@@ -1,10 +1,14 @@
-.PHONY: release
+.PHONY: dev release
 
+# make dev                   — run the app in development mode (tauri dev)
 # make release               — bump patch (0.1.0 → 0.1.1), commit, tag and push
 # make release VERSION=0.2.0 — same, with an explicit version
 CURRENT := $(shell node -p "require('./src-tauri/tauri.conf.json').version")
 VERSION ?= $(shell node -p "'$(CURRENT)'.split('.').map((n, i) => i == 2 ? +n + 1 : n).join('.')")
 TAG := v$(VERSION)
+
+dev:
+	pnpm tauri dev
 
 release:
 	@test -z "$$(git status --porcelain)" || { echo "Working tree is not clean"; exit 1; }
