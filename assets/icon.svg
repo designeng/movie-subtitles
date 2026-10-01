@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2f6b"/>
+      <stop offset="1" stop-color="#0a1433"/>
+    </linearGradient>
+    <linearGradient id="film" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a2f3a"/>
+      <stop offset="1" stop-color="#151820"/>
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect x="100" y="100" width="824" height="824" rx="185"/>
+    </clipPath>
+  </defs>
+  <!-- macOS icon grid: 824px body centered on a 1024px canvas -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g clip-path="url(#squircle)">
+    <g transform="rotate(-18 512 470)">
+      <rect x="40" y="330" width="944" height="280" fill="url(#film)"/>
+      <g fill="#0d1530">
+        <rect x="60" y="350" width="44" height="34" rx="7"/><rect x="140" y="350" width="44" height="34" rx="7"/>
+        <rect x="220" y="350" width="44" height="34" rx="7"/><rect x="300" y="350" width="44" height="34" rx="7"/>
+        <rect x="380" y="350" width="44" height="34" rx="7"/><rect x="460" y="350" width="44" height="34" rx="7"/>
+        <rect x="540" y="350" width="44" height="34" rx="7"/><rect x="620" y="350" width="44" height="34" rx="7"/>
+        <rect x="700" y="350" width="44" height="34" rx="7"/><rect x="780" y="350" width="44" height="34" rx="7"/>
+        <rect x="860" y="350" width="44" height="34" rx="7"/><rect x="940" y="350" width="44" height="34" rx="7"/>
+        <rect x="60" y="556" width="44" height="34" rx="7"/><rect x="140" y="556" width="44" height="34" rx="7"/>
+        <rect x="220" y="556" width="44" height="34" rx="7"/><rect x="300" y="556" width="44" height="34" rx="7"/>
+        <rect x="380" y="556" width="44" height="34" rx="7"/><rect x="460" y="556" width="44" height="34" rx="7"/>
+        <rect x="540" y="556" width="44" height="34" rx="7"/><rect x="620" y="556" width="44" height="34" rx="7"/>
+        <rect x="700" y="556" width="44" height="34" rx="7"/><rect x="780" y="556" width="44" height="34" rx="7"/>
+        <rect x="860" y="556" width="44" height="34" rx="7"/><rect x="940" y="556" width="44" height="34" rx="7"/>
+      </g>
+      <g fill="#4f8cff">
+        <rect x="90" y="404" width="250" height="132" rx="10" opacity="0.55"/>
+        <rect x="380" y="404" width="250" height="132" rx="10" opacity="0.9"/>
+        <rect x="670" y="404" width="250" height="132" rx="10" opacity="0.55"/>
+      </g>
+      <path d="M485 432 L485 508 L545 470 Z" fill="#ffffff"/>
+    </g>
+    <!-- subtitle lines -->
+    <rect x="262" y="720" width="500" height="44" rx="22" fill="#ffffff"/>
+    <rect x="322" y="790" width="380" height="44" rx="22" fill="#ffe08a"/>
+  </g>
+</svg>
