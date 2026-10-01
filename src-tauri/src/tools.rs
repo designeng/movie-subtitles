@@ -8,9 +8,12 @@ use crate::error::{msg, Result};
 
 /// Pinned yt-dlp release. To update: bump the version and paste the hash of
 /// `yt-dlp_macos` from that release's `SHA2-256SUMS` file.
-const YT_DLP_VERSION: &str = "2026.08.19";
+/// Nightly build: the OK.ru extractor fix (yt-dlp#17739) isn't in a stable release yet.
+/// Switch back to `yt-dlp/yt-dlp` once a stable release newer than 2026.09.27 ships.
+const YT_DLP_REPO: &str = "yt-dlp/yt-dlp-nightly-builds";
+const YT_DLP_VERSION: &str = "2026.09.27.232945";
 const YT_DLP_MACOS_SHA256: &str =
-    "0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202";
+    "1b1a6420f23af38b4eff225d77e3839d0f5630e1e3a3e913bd29818d70b252df";
 
 /// GUI apps on macOS don't inherit the shell PATH, so Homebrew dirs are checked explicitly.
 const SEARCH_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
@@ -46,7 +49,7 @@ pub async fn yt_dlp(bin_dir: &Path) -> Result<PathBuf> {
     }
 
     let url = format!(
-        "https://github.com/yt-dlp/yt-dlp/releases/download/{YT_DLP_VERSION}/yt-dlp_macos"
+        "https://github.com/{YT_DLP_REPO}/releases/download/{YT_DLP_VERSION}/yt-dlp_macos"
     );
     let bytes = reqwest::get(&url).await?.error_for_status()?.bytes().await?;
     let hash = format!("{:x}", Sha256::digest(&bytes));
