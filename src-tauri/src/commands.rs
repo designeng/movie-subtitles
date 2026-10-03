@@ -24,6 +24,17 @@ pub fn list_library(state: State<'_, AppState>) -> Vec<LibraryEntry> {
     state.library.lock().unwrap().entries().to_vec()
 }
 
+/// Size in bytes of each entry's video file, keyed by entry id.
+#[tauri::command]
+pub fn library_sizes(state: State<'_, AppState>) -> std::collections::HashMap<String, u64> {
+    let library = state.library.lock().unwrap();
+    library
+        .entries()
+        .iter()
+        .filter_map(|e| Some((e.id.clone(), std::fs::metadata(&e.video_path).ok()?.len())))
+        .collect()
+}
+
 #[tauri::command]
 pub async fn download_video(
     app: AppHandle,

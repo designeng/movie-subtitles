@@ -74,6 +74,7 @@ export interface Settings {
   /** Empty means the default folder inside the app data directory. */
   videosDir: string;
   videoQuality: VideoQuality;
+  showFilesInfo: boolean;
 }
 
 export type VideoQuality = "best" | "1080p" | "720p";
@@ -82,6 +83,7 @@ export type SubtitleMode = "original" | "translation" | "both";
 
 export const api = {
   listLibrary: () => invoke<LibraryEntry[]>("list_library"),
+  librarySizes: () => invoke<Record<string, number>>("library_sizes"),
   mediaBaseUrl: () => invoke<string>("media_base_url"),
   downloadVideo: (url: string) => invoke<LibraryEntry>("download_video", { url }),
   cancelDownload: () => invoke<void>("cancel_download"),

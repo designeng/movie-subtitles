@@ -100,6 +100,10 @@ async function save() {
         </label>
         <p class="muted hint">A 2-hour movie in 4K can take 10 GB or more. Applies to new downloads.</p>
       </fieldset>
+      <label class="check">
+        <input v-model="form.showFilesInfo" type="checkbox" />
+        Show files info
+      </label>
       <label>
         Default subtitle language
         <input v-model="form.language" placeholder="en" />
@@ -154,6 +158,11 @@ label {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 .hint {
   font-size: 12px;

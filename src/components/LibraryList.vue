@@ -1,9 +1,19 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, type LibraryEntry } from "../api";
 
-defineProps<{ entries: LibraryEntry[]; selectedId: string | null }>();
+const props = defineProps<{ entries: LibraryEntry[]; selectedId: string | null; sizes: Record<string, number> | null }>();
+
+function formatSize(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  return `${Math.round(bytes / 1e6)} MB`;
+}
+
+const totalSize = computed(() =>
+  props.sizes ? formatSize(Object.values(props.sizes).reduce((a, b) => a + b, 0)) : "",
+);
 const emit = defineEmits<{ select: [entry: LibraryEntry]; deleted: [id: string]; error: [message: string] }>();
 
 async function reveal(entry: LibraryEntry) {
@@ -32,7 +42,7 @@ async function remove(entry: LibraryEntry) {
 
 <template>
   <aside class="library">
-    <h2>Library</h2>
+    <h2>Library <span v-if="sizes" class="size">· {{ totalSize }}</span></h2>
     <p v-if="!entries.length" class="muted empty">Downloaded movies will appear here.</p>
     <ul>
       <li
@@ -42,7 +52,9 @@ async function remove(entry: LibraryEntry) {
         @click="emit('select', entry)"
       >
         <div class="info">
-          <div class="title" :title="entry.title">{{ entry.title }}</div>
+          <div class="title" :title="entry.title">
+            {{ entry.title }}<span v-if="sizes && sizes[entry.id] != null" class="size"> · {{ formatSize(sizes[entry.id]) }}</span>
+          </div>
           <div class="meta muted">
             {{ entry.provider }} · {{ entry.subtitleLabel ? "subtitles" : "no subtitles" }}
           </div>
@@ -67,6 +79,12 @@ h2 {
   letter-spacing: 0.06em;
   color: var(--muted);
   margin: 16px 16px 8px;
+}
+.size {
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
 }
 .empty {
   margin: 0 16px;

@@ -19,6 +19,7 @@ const offsetMs = ref(0);
 const timeMs = ref(0);
 const settings = ref<Settings | null>(null);
 const showSettings = ref(false);
+const sizes = ref<Record<string, number> | null>(null);
 const fullscreen = ref(false);
 const error = ref("");
 const player = ref<InstanceType<typeof VideoPlayer>>();
@@ -59,6 +60,17 @@ const videoSrc = computed(() =>
   selected.value && mediaBaseUrl.value
     ? `${mediaBaseUrl.value}/${encodeURIComponent(selected.value.id)}?v=${selected.value.addedAt}`
     : "",
+);
+
+watch(
+  () => [entries.value, settings.value?.showFilesInfo] as const,
+  async ([, show]) => {
+    try {
+      sizes.value = show ? await api.librarySizes() : null;
+    } catch {
+      sizes.value = null;
+    }
+  },
 );
 
 onMounted(async () => {
@@ -222,6 +234,7 @@ function onKey(e: KeyboardEvent) {
         v-if="!fullscreen"
         :entries="entries"
         :selected-id="selected?.id ?? null"
+        :sizes="sizes"
         @select="select"
         @deleted="onDeleted"
         @error="error = $event"

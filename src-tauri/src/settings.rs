@@ -19,6 +19,8 @@ pub struct Settings {
     /// Where downloaded videos go; empty means `<app data>/videos`.
     pub videos_dir: String,
     pub video_quality: VideoQuality,
+    /// Show video file sizes in the library.
+    pub show_files_info: bool,
 }
 
 /// Upper limit for downloaded video resolution.
@@ -55,6 +57,7 @@ impl Default for Settings {
             translate_to: "ru".into(),
             videos_dir: String::new(),
             video_quality: VideoQuality::Best,
+            show_files_info: false,
         }
     }
 }
