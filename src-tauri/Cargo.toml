@@ -1,6 +1,6 @@
 [package]
 name = "movie-subtitles"
-version = "0.1.11"
+version = "0.1.12"
 description = "Movie player with downloadable videos and adjustable subtitles"
 authors = ["savenok"]
 edition = "2021"
