@@ -259,7 +259,10 @@ function onLineClick(e: MouseEvent, cue: Cue, index: number) {
         <button :class="{ active: mode === 'translation' }" @click="mode = 'translation'">Translation</button>
         <button :class="{ active: mode === 'both' }" @click="mode = 'both'">Both</button>
       </div>
-      <p v-if="translateError" class="error">{{ translateError }}</p>
+      <div v-if="translateError" class="error-box">
+        <p class="error">{{ translateError }}</p>
+        <button class="dismiss" title="Dismiss" aria-label="Dismiss error" @click="translateError = ''">×</button>
+      </div>
     </div>
 
     <section v-if="tab === 'search'" class="search">
@@ -390,6 +393,17 @@ function onLineClick(e: MouseEvent, cue: Cue, index: number) {
 }
 .translate .error {
   margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.error-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.dismiss {
+  padding: 0 6px;
+  line-height: 1.2;
 }
 .modes {
   display: flex;

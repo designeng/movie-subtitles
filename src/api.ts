@@ -83,6 +83,7 @@ export interface Settings {
   subdlApiKey: string;
   language: string;
   googleTranslateApiKey: string;
+  mymemoryEmail: string;
   translateTo: string;
   /** Empty means the default folder inside the app data directory. */
   videosDir: string;

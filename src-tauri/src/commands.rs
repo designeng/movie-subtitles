@@ -12,7 +12,7 @@ use crate::media_server::MediaServer;
 use crate::movies::{self, Movie};
 use crate::settings::Settings;
 use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery, SubtitleSearch};
-use crate::translate::{GoogleTranslate, GoogleTranslateFree, Translator};
+use crate::translate::{GoogleTranslate, GoogleTranslateFree, MyMemory, Translator, WithFallback};
 use crate::video::{DownloadProgress, VideoProvider, VideoSearchResult};
 use crate::AppState;
 
@@ -324,9 +324,15 @@ pub async fn translate_subtitles(
     let cues = format::parse(&format::decode(&std::fs::read(source)?));
     let texts: Vec<String> = cues.into_iter().map(|c| c.text).collect();
 
-    let api_key = state.settings.lock().unwrap().google_translate_api_key.trim().to_string();
+    let (api_key, email) = {
+        let settings = state.settings.lock().unwrap();
+        (settings.google_translate_api_key.trim().to_string(), settings.mymemory_email.trim().to_string())
+    };
     let translator: Box<dyn Translator> = if api_key.is_empty() {
-        Box::new(GoogleTranslateFree::new())
+        Box::new(WithFallback {
+            primary: Box::new(GoogleTranslateFree::new()),
+            fallback: Box::new(MyMemory::new(email)),
+        })
     } else {
         Box::new(GoogleTranslate::new(api_key))
     };
