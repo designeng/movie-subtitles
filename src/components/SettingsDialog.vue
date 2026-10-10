@@ -77,6 +77,14 @@ async function save() {
           characters per month are free, a movie is ~50–100k).
         </p>
         <label>
+          MyMemory email <span class="muted">(optional)</span>
+          <input v-model="form.mymemoryEmail" type="email" autocomplete="off" spellcheck="false" placeholder="you@example.com" />
+        </label>
+        <p class="muted hint">
+          When the free Google endpoint is blocked, MyMemory is used as a fallback. Its anonymous quota is
+          ~5,000 characters per day; providing an email raises it to ~50,000.
+        </p>
+        <label>
           Translate to
           <input v-model="form.translateTo" placeholder="ru" />
         </label>
