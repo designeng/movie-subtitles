@@ -91,18 +91,62 @@ onUnmounted(() => {
   window.removeEventListener("resize", onWindowResize);
 });
 
+// The translation shown for each movie survives restarts; the lines come from the backend's disk cache.
+interface SavedTranslation {
+  target: string;
+  mode: SubtitleMode;
+}
+const translationKey = (id: string) => `translation:${id}`;
+function loadSavedTranslation(id: string): SavedTranslation | null {
+  try {
+    return JSON.parse(localStorage.getItem(translationKey(id)) ?? "null");
+  } catch {
+    return null;
+  }
+}
+function saveTranslation(id: string, saved: SavedTranslation | null) {
+  if (saved) localStorage.setItem(translationKey(id), JSON.stringify(saved));
+  else localStorage.removeItem(translationKey(id));
+}
+const translateTarget = ref("");
+
 async function select(entry: LibraryEntry) {
   selected.value = entry;
   localStorage.setItem("lastEntryId", entry.id);
   offsetMs.value = entry.offsetMs;
   cues.value = [];
   translations.value = null;
+  subtitleMode.value = "original";
+  translateTarget.value = "";
   try {
     cues.value = (await api.getSubtitles(entry.id)) ?? [];
   } catch (e) {
     error.value = String(e);
   }
+  const saved = loadSavedTranslation(entry.id);
+  if (!saved || !cues.value.length) return;
+  try {
+    const lines = await api.translateSubtitles(entry.id, saved.target);
+    if (selected.value?.id !== entry.id) return;
+    translations.value = lines;
+    translateTarget.value = saved.target;
+    subtitleMode.value = saved.mode;
+  } catch {
+    // Offline or quota exceeded: the user can translate again from the panel.
+  }
 }
+
+function onTranslated(lines: string[], target: string) {
+  translations.value = lines;
+  translateTarget.value = target;
+  if (selected.value) saveTranslation(selected.value.id, { target, mode: subtitleMode.value });
+}
+
+watch(subtitleMode, (mode) => {
+  if (selected.value && translations.value && translateTarget.value) {
+    saveTranslation(selected.value.id, { target: translateTarget.value, mode });
+  }
+});
 
 function replaceEntry(entry: LibraryEntry) {
   entries.value = entries.value.map((e) => (e.id === entry.id ? entry : e));
@@ -116,6 +160,7 @@ async function onDownloaded(entry: LibraryEntry) {
 
 function onDeleted(id: string) {
   entries.value = entries.value.filter((e) => e.id !== id);
+  saveTranslation(id, null);
   if (selected.value?.id === id) {
     selected.value = null;
     cues.value = [];
@@ -126,7 +171,9 @@ function onDeleted(id: string) {
 async function onSubtitlesLoaded(loaded: Cue[]) {
   cues.value = loaded;
   translations.value = null;
+  subtitleMode.value = "original";
   offsetMs.value = 0;
+  if (selected.value) saveTranslation(selected.value.id, null);
   // The backend updated the label and reset the offset.
   entries.value = await api.listLibrary();
   selected.value = entries.value.find((e) => e.id === selected.value?.id) ?? null;
@@ -135,7 +182,9 @@ async function onSubtitlesLoaded(loaded: Cue[]) {
 function onSubtitlesRemoved(entry: LibraryEntry) {
   cues.value = [];
   translations.value = null;
+  subtitleMode.value = "original";
   offsetMs.value = 0;
+  saveTranslation(entry.id, null);
   replaceEntry(entry);
 }
 
@@ -276,7 +325,7 @@ function onKey(e: KeyboardEvent) {
         @removed="onSubtitlesRemoved"
         @seek="player?.seek($event)"
         @set-offset="offsetMs = $event"
-        @translated="translations = $event"
+        @translated="onTranslated"
       />
     </main>
     <SettingsDialog
