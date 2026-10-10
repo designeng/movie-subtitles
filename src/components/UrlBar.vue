@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { api, type DownloadProgress, type LibraryEntry, type VideoSearchResult } from "../api";
+import { api, type DownloadProgress, type LibraryEntry, type Movie, type VideoSearchResult } from "../api";
 import { formatTime } from "../subtitles";
 
 const emit = defineEmits<{ downloaded: [entry: LibraryEntry]; openSettings: [] }>();
@@ -11,6 +11,10 @@ const isLink = computed(() => /^https?:\/\//i.test(input.value.trim()));
 const busy = ref(false);
 const searching = ref(false);
 const results = ref<VideoSearchResult[] | null>(null);
+/** Movies matching the typed title; `movie` is the one searched for (null: the text as typed). */
+const movies = ref<Movie[]>([]);
+const movie = ref<Movie | null>(null);
+const typedQuery = ref("");
 const progress = ref<DownloadProgress | null>(null);
 const error = ref("");
 
@@ -38,15 +42,40 @@ function submit() {
 async function search() {
   const query = input.value.trim();
   if (!query || searching.value) return;
+  typedQuery.value = query;
+  searching.value = true;
+  error.value = "";
+  // The original title finds the original-language video; if the lookup fails, search as typed.
+  movies.value = await api.findMovies(query).catch(() => []);
+  await searchFor(movies.value[0] ?? null);
+}
+
+function movieQuery(m: Movie): string {
+  return m.year ? `${m.title} ${m.year}` : m.title;
+}
+
+function movieLabel(m: Movie): string {
+  const name = m.label && m.label !== m.title ? `${m.title} — ${m.label}` : m.title;
+  return [name, m.year, m.description].filter(Boolean).join(" · ");
+}
+
+async function searchFor(m: Movie | null) {
+  movie.value = m;
   searching.value = true;
   error.value = "";
   try {
-    results.value = await api.searchVideos(query);
+    results.value = m
+      ? await api.searchVideos(movieQuery(m), m.language)
+      : await api.searchVideos(typedQuery.value);
   } catch (e) {
     error.value = String(e);
   } finally {
     searching.value = false;
   }
+}
+
+function pickMovie(id: string) {
+  searchFor(movies.value.find((m) => m.id === id) ?? null);
 }
 
 function formatViews(n: number): string {
@@ -62,6 +91,7 @@ async function download(url: string) {
     const entry = await api.downloadVideo(url);
     input.value = "";
     results.value = null;
+    movies.value = [];
     emit("downloaded", entry);
   } catch (e) {
     if (String(e) !== "cancelled") error.value = String(e);
@@ -95,10 +125,25 @@ async function download(url: string) {
       <button type="button" class="ghost" @click="api.cancelDownload()">Cancel</button>
     </div>
     <div v-if="error" class="error">{{ error }}</div>
+    <div v-if="movies.length && (results || searching)" class="movie muted">
+      <span v-if="movie">
+        Original: <strong class="original">{{ movie.title }}</strong><template v-if="movie.year"> · {{ movie.year }}</template>
+      </span>
+      <span v-else>Searching as typed</span>
+      <select
+        title="Other movies with this title"
+        :value="movie?.id ?? ''"
+        :disabled="searching"
+        @change="pickMovie(($event.target as HTMLSelectElement).value)"
+      >
+        <option v-for="m in movies" :key="m.id" :value="m.id">{{ movieLabel(m) }}</option>
+        <option value="">“{{ typedQuery }}” as typed</option>
+      </select>
+    </div>
     <div v-if="results" class="results">
       <div class="results-head muted">
         <span>{{ results.length ? `YouTube · ${results.length} results, 20+ min` : "Nothing found on YouTube." }}</span>
-        <button type="button" class="ghost" title="Close" @click="results = null">✕</button>
+        <button type="button" class="ghost" title="Close" @click="results = null; movies = []">✕</button>
       </div>
       <ul>
         <li v-for="r in results" :key="r.url" :class="{ dubbed: r.likelyDubbed }">
@@ -148,6 +193,19 @@ async function download(url: string) {
   background: var(--panel-2);
   border-radius: 2px;
   overflow: hidden;
+}
+.movie {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.movie .original {
+  color: var(--text);
+}
+.movie select {
+  max-width: 50%;
+  margin-left: auto;
 }
 .results {
   display: flex;

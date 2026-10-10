@@ -105,8 +105,9 @@ impl Registry {
     }
 
     /// Searches every provider that supports it; original-language,
-    /// feature-length videos come first.
-    pub async fn search(&self, query: &str) -> Result<Vec<VideoSearchResult>> {
+    /// feature-length videos come first. `original_language` (ISO 639) is the
+    /// movie's language when known; otherwise the original is assumed to be English.
+    pub async fn search(&self, query: &str, original_language: Option<&str>) -> Result<Vec<VideoSearchResult>> {
         let mut all = Vec::new();
         let mut last_err = None;
         for provider in &self.providers {
@@ -119,7 +120,7 @@ impl Registry {
             return Err(e);
         }
         for r in &mut all {
-            r.likely_dubbed = looks_dubbed(&r.title);
+            r.likely_dubbed = looks_dubbed(&r.title, original_language);
         }
         rank(&mut all);
         Ok(all)
@@ -129,14 +130,18 @@ impl Registry {
 const FEATURE_LENGTH_SECS: f64 = 60.0 * 60.0;
 
 static DUBBED_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\p{Cyrillic}|\b(dubbed|dub|dublado|doblaje|doblada|latino|en español|in hindi|hindi|tamil|telugu)\b")
-        .unwrap()
+    Regex::new(r"(?i)\b(dubbed|dub|dublado|doblaje|doblada|latino|en español|in hindi|hindi|tamil|telugu)\b").unwrap()
 });
+static CYRILLIC_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\p{Cyrillic}").unwrap());
+/// Languages whose original titles are written in Cyrillic.
+const CYRILLIC_LANGUAGES: &[&str] = &["ru", "uk", "be", "bg", "sr", "mk", "kk"];
 
-/// Movies are wanted in their original (mostly English) language, so titles
-/// in Cyrillic or mentioning a dub are likely not the original audio.
-fn looks_dubbed(title: &str) -> bool {
-    DUBBED_RE.is_match(title)
+/// Movies are wanted in their original language, so titles mentioning a dub,
+/// or in Cyrillic when the movie is not from a Cyrillic-script country, are
+/// likely not the original audio.
+fn looks_dubbed(title: &str, original_language: Option<&str>) -> bool {
+    let cyrillic_original = original_language.is_some_and(|l| CYRILLIC_LANGUAGES.contains(&l));
+    DUBBED_RE.is_match(title) || (!cyrillic_original && CYRILLIC_RE.is_match(title))
 }
 
 /// Stable sort: keeps the site's relevance order within each group.
@@ -163,10 +168,13 @@ mod tests {
 
     #[test]
     fn detects_dubs() {
-        assert!(looks_dubbed("Начало (2010) фильм"));
-        assert!(looks_dubbed("Inception Hindi Dubbed Full Movie"));
-        assert!(!looks_dubbed("Night of the Living Dead (1968) Full Movie | English"));
-        assert!(!looks_dubbed("Dubai Nights"));
+        assert!(looks_dubbed("Начало (2010) фильм", None));
+        assert!(looks_dubbed("Начало (2010) фильм", Some("en")));
+        assert!(!looks_dubbed("Брат (1997)", Some("ru")));
+        assert!(looks_dubbed("Брат дублированный dub", Some("ru")));
+        assert!(looks_dubbed("Inception Hindi Dubbed Full Movie", None));
+        assert!(!looks_dubbed("Night of the Living Dead (1968) Full Movie | English", None));
+        assert!(!looks_dubbed("Dubai Nights", None));
     }
 
     #[test]
@@ -179,7 +187,7 @@ mod tests {
             duration: Some(mins * 60.0),
             views: None,
             thumbnail: None,
-            likely_dubbed: looks_dubbed(title),
+            likely_dubbed: looks_dubbed(title, None),
         };
         let mut results = vec![r("Review", 25.0), r("Фильм", 95.0), r("Movie A", 95.0), r("Movie B", 90.0)];
         rank(&mut results);

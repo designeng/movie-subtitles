@@ -56,6 +56,19 @@ export interface VideoSearchResult {
   likelyDubbed: boolean;
 }
 
+/** A movie found on Wikidata by its title in any language. */
+export interface Movie {
+  id: string;
+  /** Title in the original language. */
+  title: string;
+  /** ISO 639 code of the original title. */
+  language: string | null;
+  year: number | null;
+  /** Name and description in the user's language. */
+  label: string;
+  description: string;
+}
+
 export interface DownloadProgress {
   stage: string;
   percent: number | null;
@@ -87,7 +100,9 @@ export const api = {
   mediaBaseUrl: () => invoke<string>("media_base_url"),
   downloadVideo: (url: string) => invoke<LibraryEntry>("download_video", { url }),
   cancelDownload: () => invoke<void>("cancel_download"),
-  searchVideos: (query: string) => invoke<VideoSearchResult[]>("search_videos", { query }),
+  findMovies: (query: string) => invoke<Movie[]>("find_movies", { query }),
+  searchVideos: (query: string, originalLanguage: string | null = null) =>
+    invoke<VideoSearchResult[]>("search_videos", { query, originalLanguage }),
   deleteEntry: (id: string) => invoke<void>("delete_entry", { id }),
   searchSubtitles: (query: string, language: string) =>
     invoke<SubtitleSearch>("search_subtitles", { query, language }),
