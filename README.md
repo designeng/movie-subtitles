@@ -35,6 +35,7 @@ pnpm tauri dev
 
 - `src-tauri/src/video/` — провайдеры видео (`VideoProvider`), сейчас yt-dlp для YouTube, VK и OK.ru
 - `src-tauri/src/subtitles/` — провайдеры субтитров (`SubtitleProvider`), парсер SRT/VTT
+- `src-tauri/src/movies.rs` — поиск оригинального названия и года фильма по названию на любом языке (Wikidata, без ключа)
 - `src-tauri/src/translate.rs` — перевод (`Translator`)
 - `src-tauri/src/library.rs` — библиотека фильмов; удаление чистит видео, фрагменты, субтитры и переводы
 - Данные: `~/Library/Application Support/com.savenok.moviesubtitles/`

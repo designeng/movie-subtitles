@@ -2,6 +2,7 @@ mod commands;
 mod error;
 mod library;
 mod media_server;
+mod movies;
 mod settings;
 mod subtitles;
 mod tools;
@@ -71,6 +72,7 @@ pub fn run() {
             commands::library_sizes,
             commands::download_video,
             commands::cancel_download,
+            commands::find_movies,
             commands::search_videos,
             commands::delete_entry,
             commands::search_subtitles,

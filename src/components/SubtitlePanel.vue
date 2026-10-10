@@ -19,7 +19,7 @@ const emit = defineEmits<{
   removed: [entry: LibraryEntry];
   seek: [ms: number];
   setOffset: [ms: number];
-  translated: [lines: string[]];
+  translated: [lines: string[], target: string];
 }>();
 
 const tab = ref<"search" | "lines">(props.cues.length ? "lines" : "search");
@@ -175,7 +175,8 @@ async function translate() {
   translating.value = true;
   translateError.value = "";
   try {
-    emit("translated", await api.translateSubtitles(props.entry.id, target.value));
+    const lang = target.value.trim().toLowerCase();
+    emit("translated", await api.translateSubtitles(props.entry.id, lang), lang);
     if (mode.value === "original") mode.value = "both";
   } catch (e) {
     translateError.value = String(e);
@@ -211,9 +212,22 @@ watch(currentIndex, async (i) => {
   list.value?.querySelector(`[data-index="${i}"]`)?.scrollIntoView({ block: "center" });
 });
 
+/** Shows the ⏱ buttons: find the line being spoken (e.g. with the filter) and snap the subtitles to it. */
+const syncMode = ref(localStorage.getItem("syncMode") === "1");
+watch(syncMode, (on) => localStorage.setItem("syncMode", on ? "1" : "0"));
+
 /** "This line is being spoken right now" — align the cue's start to the current time. */
-function syncHere(cue: Cue) {
+async function syncHere(cue: Cue, index: number) {
   emit("setOffset", Math.round(props.timeMs - cue.startMs));
+  // Back to the full list, centred on the line that is now current, for fine-tuning.
+  filter.value = "";
+  await nextTick();
+  list.value?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: "center" });
+}
+
+function onLineClick(e: MouseEvent, cue: Cue, index: number) {
+  if (e.shiftKey && (e.metaKey || e.ctrlKey)) syncHere(cue, index);
+  else emit("seek", cue.startMs + props.offsetMs);
 }
 </script>
 
@@ -245,7 +259,10 @@ function syncHere(cue: Cue) {
         <button :class="{ active: mode === 'translation' }" @click="mode = 'translation'">Translation</button>
         <button :class="{ active: mode === 'both' }" @click="mode = 'both'">Both</button>
       </div>
-      <p v-if="translateError" class="error">{{ translateError }}</p>
+      <div v-if="translateError" class="error-box">
+        <p class="error">{{ translateError }}</p>
+        <button class="dismiss" title="Dismiss" aria-label="Dismiss error" @click="translateError = ''">×</button>
+      </div>
     </div>
 
     <section v-if="tab === 'search'" class="search">
@@ -293,9 +310,13 @@ function syncHere(cue: Cue) {
       <div class="row">
         <input v-model="filter" class="grow" placeholder="Filter lines…" />
         <label class="muted follow"><input v-model="follow" type="checkbox" /> follow</label>
+        <label class="muted follow" title="Show ⏱ buttons to snap the subtitles to a line">
+          <input v-model="syncMode" type="checkbox" /> sync
+        </label>
       </div>
       <p class="muted tip">
-        Click a line to jump to it. Press ⏱ while that line is being spoken to sync all subtitles to it.
+        Click a line to jump to it. To sync, find the line being spoken now and press ⏱
+        (enable “sync”) or ⇧⌘-click it — the subtitles shift to that line.
       </p>
       <ol ref="list">
         <li
@@ -303,14 +324,22 @@ function syncHere(cue: Cue) {
           :key="index"
           :data-index="index"
           :class="{ current: index === currentIndex }"
-          @click="emit('seek', cue.startMs + offsetMs)"
+          @click="onLineClick($event, cue, index)"
+          @mousedown="$event.shiftKey && $event.preventDefault()"
         >
           <span class="time muted">{{ formatTime(cue.startMs + offsetMs) }}</span>
           <span class="text">
             <template v-if="showOriginal(index)">{{ cue.text }}</template>
             <span v-if="showTranslation(index)" class="tr">{{ translations?.[index] }}</span>
           </span>
-          <button class="ghost" title="This line is spoken now — sync to it" @click.stop="syncHere(cue)">⏱</button>
+          <button
+            v-if="syncMode"
+            class="ghost"
+            title="This line is spoken now — sync to it (⇧⌘-click)"
+            @click.stop="syncHere(cue, index)"
+          >
+            ⏱
+          </button>
         </li>
       </ol>
     </section>
@@ -364,6 +393,17 @@ function syncHere(cue: Cue) {
 }
 .translate .error {
   margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.error-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.dismiss {
+  padding: 0 6px;
+  line-height: 1.2;
 }
 .modes {
   display: flex;

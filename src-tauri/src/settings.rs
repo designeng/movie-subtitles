@@ -14,6 +14,8 @@ pub struct Settings {
     /// Default subtitle language (ISO 639-1).
     pub language: String,
     pub google_translate_api_key: String,
+    /// Email sent to MyMemory (fallback translator) to raise its daily quota.
+    pub mymemory_email: String,
     /// Target language for translated subtitles (ISO 639-1).
     pub translate_to: String,
     /// Where downloaded videos go; empty means `<app data>/videos`.
@@ -54,6 +56,7 @@ impl Default for Settings {
             subdl_api_key: String::new(),
             language: "en".into(),
             google_translate_api_key: String::new(),
+            mymemory_email: String::new(),
             translate_to: "ru".into(),
             videos_dir: String::new(),
             video_quality: VideoQuality::Best,

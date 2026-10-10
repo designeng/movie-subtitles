@@ -3,6 +3,8 @@
 //! - `GoogleTranslate`: official Cloud Translation v2, needs an API key.
 //! - `GoogleTranslateFree`: the keyless `translate.googleapis.com` endpoint used by
 //!   browser extensions. Unofficial and rate-limited; fine for personal use only.
+//! - `MyMemory`: keyless api.mymemory.translated.net, small daily quota; used as a
+//!   fallback when the free Google endpoint is blocked (see `WithFallback`).
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -133,6 +135,90 @@ impl Translator for GoogleTranslateFree {
             }
         }
         Ok(out)
+    }
+}
+
+pub struct MyMemory {
+    client: Client,
+    /// Optional; MyMemory raises the daily quota for requests that include one.
+    email: String,
+}
+
+/// The API rejects `q` longer than 500 bytes.
+const MYMEMORY_MAX_BYTES: usize = 500;
+const MYMEMORY_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
+
+impl MyMemory {
+    pub fn new(email: String) -> Self {
+        let client = Client::builder()
+            .user_agent(concat!("MovieSubtitles/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .unwrap_or_default();
+        Self { client, email }
+    }
+
+    async fn translate_text(&self, text: &str, target: &str) -> Result<String> {
+        let langpair = format!("Autodetect|{target}");
+        let mut request = self
+            .client
+            .get("https://api.mymemory.translated.net/get")
+            .query(&[("q", text), ("langpair", langpair.as_str())]);
+        if !self.email.is_empty() {
+            request = request.query(&[("de", self.email.as_str())]);
+        }
+        let resp = request.send().await?;
+        let status = resp.status();
+        let body: serde_json::Value = resp.json().await.map_err(|_| msg(format!("MyMemory failed ({status})")))?;
+        // `responseStatus` is a number on success but may be a string on errors.
+        let code = match &body["responseStatus"] {
+            serde_json::Value::Number(n) => n.as_u64().unwrap_or(0),
+            serde_json::Value::String(s) => s.parse().unwrap_or(0),
+            _ => 0,
+        };
+        let translated = body["responseData"]["translatedText"].as_str().unwrap_or_default();
+        if !status.is_success() || code != 200 || translated.is_empty() {
+            let details = body["responseDetails"].as_str().unwrap_or(translated);
+            return Err(msg(format!("MyMemory failed ({status}, {code}): {details}")));
+        }
+        Ok(translated.to_string())
+    }
+}
+
+#[async_trait]
+impl Translator for MyMemory {
+    async fn translate(&self, texts: &[String], target: &str) -> Result<Vec<String>> {
+        let mut out = Vec::with_capacity(texts.len());
+        for (i, text) in texts.iter().enumerate() {
+            let line = text.replace('\n', " ");
+            if line.trim().is_empty() || line.len() > MYMEMORY_MAX_BYTES {
+                // Nothing to translate, or too long for the API: keep as is.
+                out.push(line);
+                continue;
+            }
+            if i > 0 {
+                tokio::time::sleep(MYMEMORY_DELAY).await;
+            }
+            out.push(self.translate_text(&line, target).await?.trim().to_string());
+        }
+        Ok(out)
+    }
+}
+
+/// Tries `primary`; if it fails (e.g. blocked or rate-limited), retries with `fallback`.
+pub struct WithFallback {
+    pub primary: Box<dyn Translator>,
+    pub fallback: Box<dyn Translator>,
+}
+
+#[async_trait]
+impl Translator for WithFallback {
+    async fn translate(&self, texts: &[String], target: &str) -> Result<Vec<String>> {
+        match self.primary.translate(texts, target).await {
+            Ok(lines) => Ok(lines),
+            Err(primary_err) => self.fallback.translate(texts, target).await.map_err(|fallback_err| {
+                msg(format!("{primary_err}\n\nFallback translator also failed: {fallback_err}"))
+            }),
+        }
     }
 }
 
