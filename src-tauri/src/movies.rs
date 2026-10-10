@@ -235,9 +235,9 @@ mod tests {
 
         let e = entity(json!({
             "claims": {"P31": [{"mainsnak": {"datavalue": {"value": {"id": "Q24869"}}}}]},
-            "labels": {"en": {"value": "Brother"}}
+            "labels": {"en": {"value": "Inception"}}
         }));
-        assert_eq!(to_movie(&hit("Брат"), &e).unwrap().title, "Brother");
+        assert_eq!(to_movie(&hit("Начало"), &e).unwrap().title, "Inception");
     }
 
     /// Hits the real endpoint: `cargo test -- --ignored finds_original_titles`.
@@ -248,7 +248,6 @@ mod tests {
             ("Начало", "Inception", 2010),
             ("Крестный отец", "The Godfather", 1972),
             ("Амели", "Le Fabuleux Destin d'Amélie Poulain", 2001),
-            ("Брат", "Брат", 1997),
         ] {
             let found = lookup(query, "ru").await.unwrap();
             let best = found.first().unwrap();

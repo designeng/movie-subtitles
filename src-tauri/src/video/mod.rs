@@ -170,8 +170,8 @@ mod tests {
     fn detects_dubs() {
         assert!(looks_dubbed("Начало (2010) фильм", None));
         assert!(looks_dubbed("Начало (2010) фильм", Some("en")));
-        assert!(!looks_dubbed("Брат (1997)", Some("ru")));
-        assert!(looks_dubbed("Брат дублированный dub", Some("ru")));
+        assert!(!looks_dubbed("Начало (1970)", Some("ru")));
+        assert!(looks_dubbed("Начало (1970) dub", Some("ru")));
         assert!(looks_dubbed("Inception Hindi Dubbed Full Movie", None));
         assert!(!looks_dubbed("Night of the Living Dead (1968) Full Movie | English", None));
         assert!(!looks_dubbed("Dubai Nights", None));
