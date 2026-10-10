@@ -259,7 +259,7 @@ function onKey(e: KeyboardEvent) {
           <SyncControls v-if="!fullscreen" v-model="offsetMs" :disabled="!cues.length" @export="exportSrt" />
         </template>
         <div v-else class="placeholder muted">
-          <p>Paste a video link above, or search by the movie's English title to find the original.</p>
+          <p>Paste a video link above, or search by the movie's title in any language — the original is found automatically.</p>
         </div>
       </section>
       <SubtitlePanel
