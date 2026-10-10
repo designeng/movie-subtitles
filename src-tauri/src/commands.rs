@@ -9,6 +9,7 @@ use url::Url;
 use crate::error::{msg, Result};
 use crate::library::{remove_files_with_prefix, LibraryEntry};
 use crate::media_server::MediaServer;
+use crate::movies::{self, Movie};
 use crate::settings::Settings;
 use crate::subtitles::{self, format, format::Cue, SubtitleCandidate, SubtitleQuery, SubtitleSearch};
 use crate::translate::{GoogleTranslate, GoogleTranslateFree, Translator};
@@ -123,13 +124,29 @@ async fn download_inner(
     Ok(entry)
 }
 
+/// Movies whose title (in the user's language or the original one) matches `query`.
 #[tauri::command]
-pub async fn search_videos(state: State<'_, AppState>, query: String) -> Result<Vec<VideoSearchResult>> {
+pub async fn find_movies(state: State<'_, AppState>, query: String) -> Result<Vec<Movie>> {
     let query = query.trim();
     if query.is_empty() {
         return Ok(Vec::new());
     }
-    state.videos.search(query).await
+    let language = state.settings.lock().unwrap().translate_to.trim().to_string();
+    movies::lookup(query, if language.is_empty() { "en" } else { &language }).await
+}
+
+/// `original_language` is the movie's language when known, so videos in it are not taken for dubs.
+#[tauri::command]
+pub async fn search_videos(
+    state: State<'_, AppState>,
+    query: String,
+    original_language: Option<String>,
+) -> Result<Vec<VideoSearchResult>> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(Vec::new());
+    }
+    state.videos.search(query, original_language.as_deref()).await
 }
 
 /// Removes the movie, any partial download fragments and its subtitles.
