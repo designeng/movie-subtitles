@@ -301,7 +301,7 @@ pub fn set_position(state: State<'_, AppState>, entry_id: String, position_ms: u
 }
 
 /// Reads a subtitle line aloud with the selected voice; returns a WAV file.
-/// The first call downloads the speech model (~90 MB).
+/// The first call downloads the speech model (~360 MB).
 #[tauri::command]
 pub async fn speak(
     state: State<'_, AppState>,
@@ -309,8 +309,22 @@ pub async fn speak(
     speed: f32,
 ) -> Result<tauri::ipc::Response> {
     let voice = state.settings.lock().unwrap().tts_voice.clone();
-    let wav = state.tts.synthesize(&state.data_dir, &text, &voice, speed).await?;
+    let wav = state.tts.synthesize(&text, &voice, speed).await?;
     Ok(tauri::ipc::Response::new(wav))
+}
+
+/// Loads the speech model in the background if it is already downloaded.
+#[tauri::command]
+pub fn tts_warm_up(state: State<'_, AppState>) {
+    state.tts.warm_up();
+}
+
+/// Renders lines that are likely to be read aloud next, replacing the previous
+/// request; `speak` then answers from the cache.
+#[tauri::command]
+pub fn tts_prefetch(state: State<'_, AppState>, texts: Vec<String>, speed: f32) {
+    let voice = state.settings.lock().unwrap().tts_voice.clone();
+    state.tts.prefetch(&texts, &voice, speed);
 }
 
 /// Translates the entry's subtitles line by line; results are cached on disk

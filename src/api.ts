@@ -132,8 +132,12 @@ export const api = {
     invoke<void>("set_position", { entryId, positionMs }),
   translateSubtitles: (entryId: string, target: string) =>
     invoke<string[]>("translate_subtitles", { entryId, target }),
-  /** Reads text aloud; resolves to a WAV file. The first call downloads the speech model (~150 MB). */
+  /** Reads text aloud; resolves to a WAV file. The first call downloads the speech model (~360 MB). */
   speak: (text: string, speed: number) => invoke<ArrayBuffer>("speak", { text, speed }),
+  /** Loads the speech model in the background if it is already downloaded. */
+  ttsWarmUp: () => invoke<void>("tts_warm_up"),
+  /** Renders lines in the background so that `speak` answers instantly; replaces the previous request. */
+  ttsPrefetch: (texts: string[], speed: number) => invoke<void>("tts_prefetch", { texts, speed }),
   exportSubtitles: (entryId: string, path: string) =>
     invoke<void>("export_subtitles", { entryId, path }),
   getSettings: () => invoke<Settings>("get_settings"),

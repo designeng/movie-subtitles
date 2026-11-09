@@ -264,6 +264,27 @@ async function syncHere(cue: Cue, index: number) {
 /** Slower speech, to make out the words. */
 const slow = ref(localStorage.getItem("ttsSlow") === "1");
 watch(slow, (on) => localStorage.setItem("ttsSlow", on ? "1" : "0"));
+const speechSpeed = () => (slow.value ? 0.7 : 1);
+
+// Loading the model takes a few seconds; do it before the first click if it is
+// already downloaded.
+watch(
+  () => props.cues.length > 0,
+  (has) => has && api.ttsWarmUp().catch(() => {}),
+  { immediate: true },
+);
+
+/** Whether lines were read aloud in this panel; only then is it worth rendering ahead. */
+let speechUsed = false;
+
+/** Renders the lines from `index` on in the background (synthesis is slower than real time). */
+function prefetchFrom(index: number) {
+  if (!speechUsed) return;
+  const texts = props.cues.slice(index, index + 2).map((c) => c.text);
+  if (texts.length) api.ttsPrefetch(texts, speechSpeed()).catch(() => {});
+}
+// During playback, keep the current and the next line ready.
+watch([currentIndex, slow], () => prefetchFrom(currentIndex.value));
 
 /** The line being generated or played. */
 const speakingIndex = ref<number | null>(null);
@@ -297,7 +318,10 @@ async function speak(cue: Cue, index: number) {
   speakError.value = "";
   emit("speak");
   try {
-    const wav = await api.speak(cue.text, slow.value ? 0.7 : 1);
+    const wav = await api.speak(cue.text, speechSpeed());
+    speechUsed = true;
+    // The user may be stepping through the lines.
+    prefetchFrom(index + 1);
     if (seq !== speakSeq) return;
     audioUrl = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
     audio = new Audio(audioUrl);

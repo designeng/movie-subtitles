@@ -38,7 +38,7 @@ impl AppState {
             subtitles: RwLock::new(Arc::new(subtitles::Registry::from_settings(&settings))),
             settings: Mutex::new(settings),
             cancel_download: Mutex::new(None),
-            tts: tts::Tts::default(),
+            tts: tts::Tts::new(&data_dir),
             data_dir,
         }
     }
@@ -89,6 +89,8 @@ pub fn run() {
             commands::set_position,
             commands::translate_subtitles,
             commands::speak,
+            commands::tts_warm_up,
+            commands::tts_prefetch,
             commands::export_subtitles,
             commands::get_settings,
             commands::save_settings,

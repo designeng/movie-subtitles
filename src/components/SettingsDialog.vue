@@ -139,7 +139,7 @@ function onKeydown(e: KeyboardEvent) {
             </select>
             <p class="hint">
               The speaker button on a subtitle line reads it in clear English, offline. The first use
-              downloads the speech model (~150 MB).
+              downloads the speech model (~360 MB).
             </p>
           </div>
         </div>
