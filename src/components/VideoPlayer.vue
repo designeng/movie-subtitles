@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { Cue, SubtitleMode } from "../api";
 import { activeCues } from "../subtitles";
+import Icon from "./ui/Icon.vue";
 
 const props = defineProps<{
   src: string;
@@ -14,6 +15,8 @@ const props = defineProps<{
   fontScale: number;
   /** Playback position to resume from. */
   startMs: number;
+  /** Show the subtitle size control over the video (used in fullscreen, where the bar is hidden). */
+  overlayControls?: boolean;
 }>();
 const emit = defineEmits<{ time: [ms: number]; toggleFullscreen: []; fontScale: [delta: number]; position: [ms: number] }>();
 
@@ -172,11 +175,20 @@ defineExpose({
       @error="onError"
       @webkitbeginfullscreen="onVideoBeginFullscreen"
     />
-    <div v-if="playError" class="play-error">{{ playError }}</div>
-    <div class="font-size" @dblclick.stop>
-      <button title="Smaller subtitles (−)" @click="emit('fontScale', -0.1)">A−</button>
-      <span>{{ Math.round(fontScale * 100) }}%</span>
-      <button title="Larger subtitles (+)" @click="emit('fontScale', 0.1)">A+</button>
+    <div v-if="playError" class="play-error">
+      <div class="play-error-card">
+        <Icon name="alert" :size="20" />
+        <p class="selectable">{{ playError }}</p>
+      </div>
+    </div>
+    <div v-if="overlayControls" class="font-size" @dblclick.stop>
+      <button class="icon sm" title="Smaller subtitles  −" aria-label="Smaller subtitles" @click="emit('fontScale', -0.1)">
+        <Icon name="minus" :size="14" />
+      </button>
+      <span class="tabular">{{ Math.round(fontScale * 100) }}%</span>
+      <button class="icon sm" title="Larger subtitles  +" aria-label="Larger subtitles" @click="emit('fontScale', 0.1)">
+        <Icon name="plus" :size="14" />
+      </button>
     </div>
     <div class="subtitles" :style="{ '--scale': fontScale }">
       <template v-for="line in visible" :key="line.key">
@@ -205,36 +217,51 @@ video {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--s-6);
+  background: rgba(0, 0, 0, 0.8);
+}
+.play-error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: 440px;
   text-align: center;
-  color: #ff8a80;
-  background: rgba(0, 0, 0, 0.75);
+  color: var(--text-secondary);
+}
+.play-error-card svg {
+  color: var(--danger);
 }
 .font-size {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: var(--s-4);
+  right: var(--s-4);
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.6);
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-lg);
+  background: rgba(20, 21, 25, 0.8);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 0 1px var(--border-strong);
   color: #fff;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--dur) var(--ease);
 }
 .player:hover .font-size {
   opacity: 1;
 }
 .font-size span {
-  min-width: 36px;
+  min-width: 40px;
   text-align: center;
-  font-variant-numeric: tabular-nums;
 }
 .font-size button {
-  padding: 2px 8px;
+  background: transparent;
+}
+.font-size button:hover {
+  background: var(--bg-control-hover);
 }
 .subtitles {
   position: absolute;
@@ -251,9 +278,10 @@ video {
 .subtitles p {
   margin: 0;
   padding: 2px 10px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: var(--r-sm);
   color: #fff;
+  font-weight: var(--fw-medium);
   font-size: calc(clamp(16px, 2.6vw, 34px) * var(--scale, 1));
   line-height: 1.3;
   text-align: center;
@@ -261,7 +289,7 @@ video {
   text-shadow: 0 1px 2px #000;
 }
 .subtitles p.translation {
-  color: #ffe08a;
+  color: var(--translation);
   font-size: calc(clamp(14px, 2.2vw, 28px) * var(--scale, 1));
 }
 </style>
