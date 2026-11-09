@@ -12,6 +12,12 @@ pnpm install
 pnpm tauri dev
 ```
 
+Установить последнюю версию из исходников в `/Applications` (macOS):
+
+```sh
+make install-local
+```
+
 `yt-dlp` скачивается автоматически при первом использовании: зафиксированная
 версия, проверка SHA-256 (см. `src-tauri/src/tools.rs`). Свой бинарник можно
 указать через `MOVIE_SUBTITLES_YT_DLP=/path/to/yt-dlp`.

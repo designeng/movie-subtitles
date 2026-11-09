@@ -1,8 +1,9 @@
-.PHONY: dev release install
+.PHONY: dev release install install-local
 
 # make dev                   — run the app in development mode (tauri dev)
 # make install               — install the latest GitHub release into /Applications (macOS)
 # make install VERSION=0.1.7 — install a specific release
+# make install-local         — build the app from source and install it into /Applications (macOS)
 # make release               — bump patch (0.1.0 → 0.1.1), commit, tag and push
 # make release VERSION=0.2.0 — same, with an explicit version
 CURRENT := $(shell node -p "require('./src-tauri/tauri.conf.json').version")
@@ -40,3 +41,14 @@ install:
 		mv "$$tmp/Movie Subtitles.app" /Applications/ && \
 		xattr -dr com.apple.quarantine "$(APP)" && \
 		echo "Installed $(APP)"
+
+BUNDLE_DIR := src-tauri/target/release/bundle/macos
+
+install-local:
+	@test "$$(uname)" = Darwin || { echo "make install-local supports macOS only"; exit 1; }
+	pnpm install
+	pnpm tauri build --bundles app
+	rm -rf "$(APP)"
+	cp -R "$(BUNDLE_DIR)/Movie Subtitles.app" /Applications/
+	@xattr -dr com.apple.quarantine "$(APP)" 2>/dev/null || true
+	@echo "Installed $(APP)"
