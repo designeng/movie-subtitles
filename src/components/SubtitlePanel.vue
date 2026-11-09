@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { api, type Cue, type LibraryEntry, type SubtitleCandidate, type SubtitleMode } from "../api";
+import { isMac } from "../platform";
 import { cueIndexAt, formatTime } from "../subtitles";
+import Icon from "./ui/Icon.vue";
+import Segmented from "./ui/Segmented.vue";
 
 const props = defineProps<{
   entry: LibraryEntry;
@@ -22,11 +25,24 @@ const emit = defineEmits<{
   translated: [lines: string[], target: string];
 }>();
 
-const tab = ref<"search" | "lines">(props.cues.length ? "lines" : "search");
+type Tab = "lines" | "search";
+const tab = ref<Tab>(props.cues.length ? "lines" : "search");
+const tabs = computed(() => [
+  { value: "lines" as Tab, label: "Lines", count: props.cues.length || undefined, disabled: !props.cues.length },
+  { value: "search" as Tab, label: props.cues.length ? "Replace" : "Find subtitles" },
+]);
+const modes: { value: SubtitleMode; label: string }[] = [
+  { value: "original", label: "Original" },
+  { value: "both", label: "Both" },
+  { value: "translation", label: "Translation" },
+];
+
 const query = ref(props.entry.searchQuery);
 const language = ref(props.defaultLanguage);
 const results = ref<SubtitleCandidate[]>([]);
 const searching = ref(false);
+/** Whether a search ran for the current movie, to tell "no results" from "not searched yet". */
+const searched = ref(false);
 const fetchingId = ref<string | null>(null);
 const error = ref("");
 /** Provider failures, shown alongside the results of the providers that worked. */
@@ -42,9 +58,11 @@ watch(
     query.value = props.entry.searchQuery;
     translateError.value = "";
     results.value = [];
+    searched.value = false;
     error.value = "";
     providerErrors.value = [];
     link.value = "";
+    filter.value = "";
     tab.value = props.cues.length ? "lines" : "search";
     init();
   },
@@ -73,8 +91,11 @@ watch(
   () => props.cues.length,
   (n) => {
     if (n) tab.value = "lines";
+    else if (tab.value === "lines") tab.value = "search";
   },
 );
+// Subtitles can also be loaded from outside the panel (dropped onto the window).
+watch(() => props.entry.subtitleLabel, refreshLocalFiles);
 
 // Guards against a slow search for a previous movie overwriting the current results.
 let searchSeq = 0;
@@ -90,6 +111,7 @@ async function search() {
     if (seq !== searchSeq) return;
     results.value = report.candidates;
     providerErrors.value = report.errors;
+    searched.value = true;
     if (!report.candidates.length && !report.errors.length) {
       error.value =
         `No “${language.value}” subtitles for “${query.value.trim()}” on ${report.searched.join(" or ")}. ` +
@@ -156,6 +178,11 @@ async function loadLink() {
 }
 
 async function removeSubtitles() {
+  const confirmed = await ask(
+    "The subtitle file, its translations and the sync offset will be deleted. You can search for subtitles again afterwards.",
+    { title: "Remove subtitles?", kind: "warning", okLabel: "Remove", cancelLabel: "Cancel" },
+  );
+  if (!confirmed) return;
   try {
     emit("removed", await api.removeSubtitles(props.entry.id));
     tab.value = "search";
@@ -164,6 +191,8 @@ async function removeSubtitles() {
     error.value = String(e);
   }
 }
+
+const providerName = (p: string) => (p === "subdl" ? "SubDL" : "OpenSubtitles");
 
 // --- Translation -----------------------------------------------------------
 
@@ -188,6 +217,7 @@ async function translate() {
 // --- Lines tab -------------------------------------------------------------
 
 const filter = ref("");
+const filterInput = ref<HTMLInputElement>();
 const currentIndex = computed(() => cueIndexAt(props.cues, props.timeMs, props.offsetMs));
 // The list follows the same Original / Translation / Both switch as the video.
 const showOriginal = (i: number) => !props.translations?.[i] || mode.value !== "translation";
@@ -229,96 +259,100 @@ function onLineClick(e: MouseEvent, cue: Cue, index: number) {
   if (e.shiftKey && (e.metaKey || e.ctrlKey)) syncHere(cue, index);
   else emit("seek", cue.startMs + props.offsetMs);
 }
+
+const syncClick = isMac ? "⇧⌘-click" : "Ctrl+Shift-click";
+
+defineExpose({
+  async focusFilter() {
+    if (!props.cues.length) return;
+    tab.value = "lines";
+    await nextTick();
+    filterInput.value?.focus();
+    filterInput.value?.select();
+  },
+});
 </script>
 
 <template>
-  <aside class="panel">
-    <nav class="tabs">
-      <button :class="{ active: tab === 'search' }" @click="tab = 'search'">Find subtitles</button>
-      <button :class="{ active: tab === 'lines' }" :disabled="!cues.length" @click="tab = 'lines'">
-        Lines <span v-if="cues.length" class="muted">{{ cues.length }}</span>
+  <aside class="panel" aria-label="Subtitles">
+    <header class="head">
+      <Segmented v-model="tab" :options="tabs" block aria-label="Subtitle panel view" />
+    </header>
+
+    <!-- Currently loaded subtitles -->
+    <div v-if="entry.subtitleLabel" class="source">
+      <Icon name="captions" :size="14" class="source-icon" />
+      <span class="truncate grow" :title="entry.subtitlePath ?? entry.subtitleLabel">{{ entry.subtitleLabel }}</span>
+      <button class="ghost danger icon sm" title="Remove subtitles…" aria-label="Remove subtitles" @click="removeSubtitles">
+        <Icon name="trash" :size="14" />
       </button>
-    </nav>
-
-    <div v-if="entry.subtitleLabel" class="current">
-      <span class="muted">Loaded:</span>
-      <span class="label" :title="entry.subtitlePath ?? entry.subtitleLabel">{{ entry.subtitleLabel }}</span>
-      <button class="ghost danger" title="Delete these subtitles" @click="removeSubtitles">✕</button>
     </div>
 
-    <div v-if="cues.length" class="translate">
-      <div class="row">
-        <span class="muted">Translate to</span>
-        <input v-model="target" class="lang" title="Target language code (ISO 639-1)" />
-        <button :disabled="translating || !target.trim()" @click="translate">
-          {{ translating ? "Translating…" : "Translate" }}
-        </button>
-      </div>
-      <div v-if="translations" class="modes">
-        <button :class="{ active: mode === 'original' }" @click="mode = 'original'">Original</button>
-        <button :class="{ active: mode === 'translation' }" @click="mode = 'translation'">Translation</button>
-        <button :class="{ active: mode === 'both' }" @click="mode = 'both'">Both</button>
-      </div>
-      <div v-if="translateError" class="error-box">
-        <p class="error">{{ translateError }}</p>
-        <button class="dismiss" title="Dismiss" aria-label="Dismiss error" @click="translateError = ''">×</button>
-      </div>
-    </div>
-
-    <section v-if="tab === 'search'" class="search">
-      <form class="row" @submit.prevent="search">
-        <input v-model="query" class="grow" placeholder="Movie title" />
-        <input v-model="language" class="lang" placeholder="en" title="Language code (ISO 639-1)" />
-        <button class="primary" type="submit" :disabled="searching || !query.trim()">
-          {{ searching ? "…" : "Search" }}
-        </button>
-      </form>
-      <form class="row" @submit.prevent="loadLink">
-        <input v-model="link" class="grow" placeholder="Direct link to .srt / .vtt / .zip" spellcheck="false" />
-        <button type="submit" :disabled="loadingLink || !link.trim()">{{ loadingLink ? "…" : "Load" }}</button>
-      </form>
-      <button class="ghost" @click="openFile">Open local .srt / .vtt…</button>
-      <div v-if="localFiles.length" class="on-disk">
-        <div class="muted">Already on disk for this movie:</div>
-        <div v-for="path in localFiles" :key="path" class="row">
-          <span class="grow file" :title="path">{{ fileName(path) }}</span>
-          <button @click="loadFile(path)">Use</button>
+    <!-- Lines -->
+    <section v-if="tab === 'lines'" class="lines">
+      <div class="block translate">
+        <div class="row">
+          <Icon name="languages" :size="14" class="subtle" />
+          <span class="muted grow">Translate to</span>
+          <input
+            v-model="target"
+            class="lang"
+            placeholder="ru"
+            title="Target language code (ISO 639-1)"
+            aria-label="Target language"
+            @keydown.enter="target.trim() && !translating && translate()"
+          />
+          <button class="sm" :disabled="translating || !target.trim()" @click="translate">
+            <span v-if="translating" class="spinner" />
+            {{ translating ? "Translating" : "Translate" }}
+          </button>
+        </div>
+        <Segmented v-if="translations" v-model="mode" :options="modes" block aria-label="Subtitle language (T)" />
+        <div v-if="translateError" class="notice error">
+          <Icon name="alert" :size="14" />
+          <span class="grow">{{ translateError }}</span>
+          <button class="ghost icon sm" title="Dismiss" aria-label="Dismiss error" @click="translateError = ''">
+            <Icon name="x" :size="12" />
+          </button>
         </div>
       </div>
-      <p v-if="error" class="error">{{ error }}</p>
-      <p v-for="e in providerErrors" :key="e" class="error">{{ e }}</p>
-      <ul class="results">
-        <li v-for="c in results" :key="`${c.provider}-${c.id}`">
-          <div class="grow">
-            <div class="release" :title="c.release">{{ c.release || c.title }}</div>
-            <div class="muted meta">
-              {{ c.title }}<template v-if="c.year"> ({{ c.year }})</template> · {{ c.language }}
-              <template v-if="c.downloads"> · ⬇ {{ c.downloads.toLocaleString() }}</template>
-              <template v-if="c.fps"> · {{ c.fps }} fps</template>
-              · {{ c.provider === "subdl" ? "SubDL" : "OpenSubtitles" }}
-              <template v-if="c.hearingImpaired"> · HI</template>
-            </div>
-          </div>
-          <button :disabled="fetchingId !== null" @click="pick(c)">
-            {{ fetchingId === c.id ? "…" : "Use" }}
-          </button>
-        </li>
-      </ul>
-    </section>
 
-    <section v-else class="lines">
-      <div class="row">
-        <input v-model="filter" class="grow" placeholder="Filter lines…" />
-        <label class="muted follow"><input v-model="follow" type="checkbox" /> follow</label>
-        <label class="muted follow" title="Show ⏱ buttons to snap the subtitles to a line">
-          <input v-model="syncMode" type="checkbox" /> sync
-        </label>
+      <div class="block filter-row">
+        <div class="filter">
+          <Icon name="search" :size="14" class="lead" />
+          <input
+            ref="filterInput"
+            v-model="filter"
+            placeholder="Filter lines"
+            aria-label="Filter lines"
+            @keydown.esc="filter ? (filter = '') : ($event.target as HTMLInputElement).blur()"
+          />
+        </div>
+        <button
+          class="ghost icon"
+          :aria-pressed="follow"
+          title="Follow playback: keep the current line in view"
+          aria-label="Follow playback"
+          @click="follow = !follow"
+        >
+          <Icon name="locate" :size="15" />
+        </button>
+        <button
+          class="ghost icon"
+          :aria-pressed="syncMode"
+          title="Sync mode: show ⏱ buttons to snap the subtitles to a line"
+          aria-label="Sync mode"
+          @click="syncMode = !syncMode"
+        >
+          <Icon name="timer" :size="15" />
+        </button>
       </div>
-      <p class="muted tip">
-        Click a line to jump to it. To sync, find the line being spoken now and press ⏱
-        (enable “sync”) or ⇧⌘-click it — the subtitles shift to that line.
+      <p v-if="syncMode" class="tip">
+        Find the line being spoken right now and press <Icon name="timer" :size="12" class="inline" /> (or
+        {{ syncClick }} it). All subtitles shift to match.
       </p>
-      <ol ref="list">
+
+      <ol v-if="shown.length" ref="list" class="cue-list">
         <li
           v-for="{ cue, index } in shown"
           :key="index"
@@ -327,207 +361,364 @@ function onLineClick(e: MouseEvent, cue: Cue, index: number) {
           @click="onLineClick($event, cue, index)"
           @mousedown="$event.shiftKey && $event.preventDefault()"
         >
-          <span class="time muted">{{ formatTime(cue.startMs + offsetMs) }}</span>
+          <span class="time tabular">{{ formatTime(cue.startMs + offsetMs) }}</span>
           <span class="text">
             <template v-if="showOriginal(index)">{{ cue.text }}</template>
             <span v-if="showTranslation(index)" class="tr">{{ translations?.[index] }}</span>
           </span>
           <button
             v-if="syncMode"
-            class="ghost"
-            title="This line is spoken now — sync to it (⇧⌘-click)"
+            class="ghost icon sm sync"
+            :title="`This line is spoken now: sync to it (${syncClick})`"
+            aria-label="Sync to this line"
             @click.stop="syncHere(cue, index)"
           >
-            ⏱
+            <Icon name="timer" :size="14" />
           </button>
         </li>
       </ol>
+      <p v-else class="empty subtle">No lines match “{{ filter }}”.</p>
+    </section>
+
+    <!-- Find / replace subtitles -->
+    <section v-else class="search">
+      <form class="block row" @submit.prevent="search">
+        <input v-model="query" class="grow" placeholder="Movie title" aria-label="Movie title" />
+        <input v-model="language" class="lang" placeholder="en" title="Language code (ISO 639-1)" aria-label="Language" />
+        <button class="primary icon" type="submit" :disabled="searching || !query.trim()" title="Search" aria-label="Search">
+          <span v-if="searching" class="spinner" />
+          <Icon v-else name="search" :size="14" />
+        </button>
+      </form>
+
+      <div class="scroll">
+        <div v-if="error || providerErrors.length" class="block messages">
+          <div v-if="error" class="notice error">
+            <Icon name="alert" :size="14" />
+            <span class="grow">{{ error }}</span>
+          </div>
+          <div v-for="e in providerErrors" :key="e" class="notice error">
+            <Icon name="alert" :size="14" />
+            <span class="grow">{{ e }}</span>
+          </div>
+        </div>
+
+        <div v-if="searching" class="loading muted"><span class="spinner" /> Searching OpenSubtitles and SubDL…</div>
+
+        <ul v-if="results.length" class="results">
+          <li v-for="c in results" :key="`${c.provider}-${c.id}`">
+            <div class="grow">
+              <div class="release truncate" :title="c.release || c.title">{{ c.release || c.title }}</div>
+              <div class="meta">
+                <span class="badge">{{ c.language.toUpperCase() }}</span>
+                <span v-if="c.hearingImpaired" class="badge" title="For the hearing impaired">HI</span>
+                <span class="truncate">
+                  {{ c.title }}<template v-if="c.year"> ({{ c.year }})</template>
+                </span>
+              </div>
+              <div class="meta subtle">
+                {{ providerName(c.provider) }}
+                <template v-if="c.downloads"> · {{ c.downloads.toLocaleString() }} downloads</template>
+                <template v-if="c.fps"> · {{ c.fps }} fps</template>
+              </div>
+            </div>
+            <button class="sm" :disabled="fetchingId !== null" @click="pick(c)">
+              <span v-if="fetchingId === c.id" class="spinner" />
+              <template v-else>Use</template>
+            </button>
+          </li>
+        </ul>
+        <p v-else-if="!searching && !searched && !error" class="empty subtle">
+          Search by title, or use one of the options below.
+        </p>
+
+        <div class="block other">
+          <div class="section-label">Other sources</div>
+          <div v-if="localFiles.length" class="on-disk">
+            <div v-for="path in localFiles" :key="path" class="file-row">
+              <Icon name="file" :size="14" class="subtle" />
+              <span class="grow truncate" :title="path">{{ fileName(path) }}</span>
+              <button class="sm" @click="loadFile(path)">Use</button>
+            </div>
+          </div>
+          <form class="row" @submit.prevent="loadLink">
+            <input
+              v-model="link"
+              class="grow"
+              placeholder="Link to .srt, .vtt or .zip"
+              aria-label="Subtitle link"
+              spellcheck="false"
+            />
+            <button type="submit" class="sm" :disabled="loadingLink || !link.trim()">
+              <span v-if="loadingLink" class="spinner" />
+              <template v-else>Load</template>
+            </button>
+          </form>
+          <button class="open-file" @click="openFile"><Icon name="file" :size="14" /> Open subtitle file…</button>
+          <p class="subtle hint"><Icon name="drop" :size="12" class="inline" /> Or drop an .srt / .vtt file onto the window.</p>
+        </div>
+      </div>
     </section>
   </aside>
 </template>
 
 <style scoped>
 .panel {
-  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-panel);
   border-left: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
 }
-.tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-}
-.tabs button {
-  flex: 1;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  padding: 12px;
-  border-bottom: 2px solid transparent;
-}
-.tabs button.active {
-  border-bottom-color: var(--accent);
-}
-.current {
+.head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  height: var(--panel-header-h);
+  padding: 0 var(--s-3);
+  flex-shrink: 0;
 }
-.current .label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.translate {
+.source {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0 var(--s-3) var(--s-2);
+  padding: 4px 4px 4px var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
 }
-.translate .error {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-}
-.error-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.dismiss {
-  padding: 0 6px;
-  line-height: 1.2;
-}
-.modes {
-  display: flex;
-}
-.modes button {
-  flex: 1;
-  border-radius: 0;
-}
-.modes button:first-child {
-  border-radius: 6px 0 0 6px;
-}
-.modes button:last-child {
-  border-radius: 0 6px 6px 0;
-}
-.modes button.active {
-  background: var(--accent);
-  border-color: var(--accent);
+.source-icon {
   color: var(--accent-text);
-}
-.tr {
-  display: block;
-  color: #e3c565;
-}
-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  min-height: 0;
-  flex: 1;
-}
-.row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
 }
 .grow {
   flex: 1;
   min-width: 0;
 }
-.lang {
-  width: 48px;
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.search > .ghost {
-  align-self: flex-start;
-  padding-left: 0;
-  color: var(--accent);
+.block {
+  padding: 0 var(--s-3);
+}
+.lang {
+  width: 44px;
+  text-align: center;
+}
+.inline {
+  display: inline-block;
+  vertical-align: -2px;
+}
+
+section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Lines --- */
+.translate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--border);
+}
+.translate .lang {
+  height: var(--h-sm);
+  font-size: var(--fs-sm);
+}
+.translate .row {
+  font-size: var(--fs-sm);
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-top: var(--s-2);
+  padding-bottom: var(--s-2);
+}
+.filter {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin-right: var(--s-1);
+}
+.filter .lead {
+  position: absolute;
+  left: 8px;
+  top: 7px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+.filter input {
+  width: 100%;
+  padding-left: 28px;
+}
+.tip {
+  margin: 0 var(--s-3) var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  border-radius: var(--r-md);
+}
+.cue-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--s-2) var(--s-2);
+}
+.cue-list li {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: 6px var(--s-2);
+  border-radius: var(--r-md);
+}
+.cue-list li:hover {
+  background: var(--bg-hover);
+}
+.cue-list li.current {
+  background: var(--bg-selected);
+}
+.cue-list li.current::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.time {
+  min-width: 52px;
+  padding-top: 1px;
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+}
+.current .time {
+  color: var(--accent-text);
+}
+.text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-line;
+  color: var(--text-secondary);
+}
+.current .text {
+  color: var(--text);
+}
+.tr {
+  display: block;
+  color: var(--translation);
+  opacity: 0.85;
+}
+.cue-list .sync {
+  margin: -3px -2px -3px 0;
+  opacity: 0.35;
+}
+.cue-list li:hover .sync,
+.cue-list li.current .sync {
+  opacity: 1;
+}
+.empty {
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-sm);
+}
+
+/* --- Search --- */
+.search > form {
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--border);
+}
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: var(--s-2);
+}
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-sm);
+}
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--s-2);
+}
+.results li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border-radius: var(--r-md);
+}
+.results li:hover {
+  background: var(--bg-hover);
+}
+.release {
+  font-weight: var(--fw-medium);
+}
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+.meta .badge {
+  flex-shrink: 0;
+}
+.results button {
+  min-width: 48px;
+}
+.other {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding-top: var(--s-3);
+  padding-bottom: var(--s-4);
+  border-top: 1px solid var(--border);
 }
 .on-disk {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  gap: 2px;
 }
-.file {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-ul,
-ol {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-}
-.results li {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-.release {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.meta {
-  font-size: 12px;
-}
-.follow {
+.file-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
 }
-.tip {
-  font-size: 12px;
-  margin: 0;
+.other .row button {
+  min-width: 48px;
 }
-.lines li {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding: 6px;
-  border-radius: 6px;
-  cursor: pointer;
+.open-file {
+  align-self: stretch;
 }
-.lines li:hover {
-  background: var(--panel-2);
-}
-.lines li.current {
-  background: var(--panel-2);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.time {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  padding-top: 2px;
-  min-width: 52px;
-}
-.text {
-  flex: 1;
-  white-space: pre-line;
-}
-.lines li button {
-  padding: 0 6px;
-  opacity: 0.4;
-}
-.lines li:hover button,
-.lines li.current button {
-  opacity: 1;
+.hint {
+  font-size: var(--fs-xs);
 }
 </style>
