@@ -5,7 +5,7 @@ export type SettingsTab = "subtitles" | "translation" | "library";
 <script setup lang="ts">
 import { open } from "@tauri-apps/plugin-dialog";
 import { computed, onMounted, ref } from "vue";
-import { api, type Settings } from "../api";
+import { api, TTS_VOICES, type Settings } from "../api";
 import { modKey, revealLabel } from "../platform";
 import Icon from "./ui/Icon.vue";
 import Modal from "./ui/Modal.vue";
@@ -129,6 +129,18 @@ function onKeydown(e: KeyboardEvent) {
           <div>
             <input id="s-to" v-model="form.translateTo" class="short" placeholder="ru" />
             <p class="hint">Default target language for subtitle translation.</p>
+          </div>
+        </div>
+        <div class="field">
+          <label for="s-voice">Read aloud voice</label>
+          <div>
+            <select id="s-voice" v-model="form.ttsVoice">
+              <option v-for="v in TTS_VOICES" :key="v.id" :value="v.id">{{ v.label }}</option>
+            </select>
+            <p class="hint">
+              The speaker button on a subtitle line reads it in clear English, offline. The first use
+              downloads the speech model (~150 MB).
+            </p>
           </div>
         </div>
 

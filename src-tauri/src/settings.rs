@@ -23,6 +23,8 @@ pub struct Settings {
     pub video_quality: VideoQuality,
     /// Show video file sizes in the library.
     pub show_files_info: bool,
+    /// Voice used to read subtitle lines aloud (see `tts::VOICES`).
+    pub tts_voice: String,
 }
 
 /// Upper limit for downloaded video resolution.
@@ -61,6 +63,7 @@ impl Default for Settings {
             videos_dir: String::new(),
             video_quality: VideoQuality::Best,
             show_files_info: false,
+            tts_voice: crate::tts::DEFAULT_VOICE.into(),
         }
     }
 }

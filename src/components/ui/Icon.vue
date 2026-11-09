@@ -39,7 +39,10 @@ const ICONS = {
   textSize: '<path d="M3 19 8 6l5 13M4.8 14.5h6.4M15 19l3-8 3 8M15.9 16.5h4.2"/>',
   play: '<path d="M8 5.5v13a.5.5 0 0 0 .77.42l10-6.5a.5.5 0 0 0 0-.84l-10-6.5A.5.5 0 0 0 8 5.5Z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  drop: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  volume: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5Z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/>',
+  stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/>',
+  turtle: '<path d="M4 15a8 7 0 0 1 16 0Z"/><path d="M8 15v3M16 15v3M20 13.5l2 .5"/>',
+  drop:'<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
 } as const;
 
 export type IconName = keyof typeof ICONS;

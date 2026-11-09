@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ask, open } from "@tauri-apps/plugin-dialog";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { api, type Cue, type LibraryEntry, type SubtitleCandidate, type SubtitleMode } from "../api";
 import { isMac } from "../platform";
 import { cueIndexAt, formatTime } from "../subtitles";
@@ -21,6 +21,8 @@ const emit = defineEmits<{
   loaded: [cues: Cue[]];
   removed: [entry: LibraryEntry];
   seek: [ms: number];
+  /** A line is about to be read aloud: the video should stop talking over it. */
+  speak: [];
   setOffset: [ms: number];
   translated: [lines: string[], target: string];
 }>();
@@ -62,6 +64,8 @@ watch(
     error.value = "";
     providerErrors.value = [];
     link.value = "";
+    stopSpeaking();
+    speakError.value = "";
     filter.value = "";
     tab.value = props.cues.length ? "lines" : "search";
     init();
@@ -255,6 +259,58 @@ async function syncHere(cue: Cue, index: number) {
   list.value?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: "center" });
 }
 
+// --- Reading lines aloud ---------------------------------------------------
+
+/** Slower speech, to make out the words. */
+const slow = ref(localStorage.getItem("ttsSlow") === "1");
+watch(slow, (on) => localStorage.setItem("ttsSlow", on ? "1" : "0"));
+
+/** The line being generated or played. */
+const speakingIndex = ref<number | null>(null);
+/** The audio of that line is still being generated (the first one also downloads the model). */
+const speakLoading = ref(false);
+const speakError = ref("");
+let speakSeq = 0;
+let audio: HTMLAudioElement | null = null;
+let audioUrl = "";
+
+function stopSpeaking() {
+  speakSeq++; // drops a generation still in flight
+  audio?.pause();
+  audio = null;
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioUrl = "";
+  speakingIndex.value = null;
+  speakLoading.value = false;
+}
+onBeforeUnmount(stopSpeaking);
+
+/** Reads the line aloud; clicking the same line again stops it. */
+async function speak(cue: Cue, index: number) {
+  const wasSpeaking = speakingIndex.value === index;
+  stopSpeaking();
+  if (wasSpeaking) return;
+
+  const seq = speakSeq;
+  speakingIndex.value = index;
+  speakLoading.value = true;
+  speakError.value = "";
+  emit("speak");
+  try {
+    const wav = await api.speak(cue.text, slow.value ? 0.7 : 1);
+    if (seq !== speakSeq) return;
+    audioUrl = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+    audio = new Audio(audioUrl);
+    audio.onended = () => seq === speakSeq && stopSpeaking();
+    speakLoading.value = false;
+    await audio.play();
+  } catch (e) {
+    if (seq !== speakSeq) return;
+    speakError.value = String(e);
+    stopSpeaking();
+  }
+}
+
 function onLineClick(e: MouseEvent, cue: Cue, index: number) {
   if (e.shiftKey && (e.metaKey || e.ctrlKey)) syncHere(cue, index);
   else emit("seek", cue.startMs + props.offsetMs);
@@ -346,6 +402,22 @@ defineExpose({
         >
           <Icon name="timer" :size="15" />
         </button>
+        <button
+          class="ghost icon"
+          :aria-pressed="slow"
+          title="Read lines aloud slowly"
+          aria-label="Slow speech"
+          @click="slow = !slow"
+        >
+          <Icon name="turtle" :size="15" />
+        </button>
+      </div>
+      <div v-if="speakError" class="notice error">
+        <Icon name="alert" :size="14" />
+        <span class="grow">{{ speakError }}</span>
+        <button class="ghost icon sm" title="Dismiss" aria-label="Dismiss error" @click="speakError = ''">
+          <Icon name="x" :size="12" />
+        </button>
       </div>
       <p v-if="syncMode" class="tip">
         Find the line being spoken right now and press <Icon name="timer" :size="12" class="inline" /> (or
@@ -366,6 +438,22 @@ defineExpose({
             <template v-if="showOriginal(index)">{{ cue.text }}</template>
             <span v-if="showTranslation(index)" class="tr">{{ translations?.[index] }}</span>
           </span>
+          <button
+            class="ghost icon sm speak"
+            :class="{ on: speakingIndex === index }"
+            :title="
+              speakingIndex !== index
+                ? 'Read this line aloud'
+                : speakLoading
+                  ? 'Preparing speech… (the first time this downloads the speech model, ~150 MB). Click to cancel.'
+                  : 'Stop'
+            "
+            :aria-label="speakingIndex === index ? 'Stop reading' : 'Read this line aloud'"
+            @click.stop="speak(cue, index)"
+          >
+            <span v-if="speakingIndex === index && speakLoading" class="spinner" />
+            <Icon v-else :name="speakingIndex === index ? 'stop' : 'volume'" :size="14" />
+          </button>
           <button
             v-if="syncMode"
             class="ghost icon sm sync"
@@ -623,12 +711,16 @@ section {
   color: var(--translation);
   opacity: 0.85;
 }
-.cue-list .sync {
+.cue-list .sync,
+.cue-list .speak {
   margin: -3px -2px -3px 0;
   opacity: 0.35;
 }
 .cue-list li:hover .sync,
-.cue-list li.current .sync {
+.cue-list li.current .sync,
+.cue-list li:hover .speak,
+.cue-list li.current .speak,
+.cue-list .speak.on {
   opacity: 1;
 }
 .empty {

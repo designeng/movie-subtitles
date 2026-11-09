@@ -512,6 +512,7 @@ const hasSubtitleKeys = computed(() => !!settings.value && (!!settings.value.ope
         @loaded="onSubtitlesLoaded"
         @removed="onSubtitlesRemoved"
         @seek="player?.seek($event)"
+        @speak="player?.pause()"
         @set-offset="offsetMs = $event"
         @translated="onTranslated"
       />
