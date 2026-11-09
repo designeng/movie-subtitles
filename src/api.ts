@@ -89,7 +89,18 @@ export interface Settings {
   videosDir: string;
   videoQuality: VideoQuality;
   showFilesInfo: boolean;
+  /** Voice that reads subtitle lines aloud. */
+  ttsVoice: string;
 }
+
+/** Voices of the speech model: id and a readable label. */
+export const TTS_VOICES: { id: string; label: string }[] = [
+  { id: "af_heart", label: "Heart (American, female)" },
+  { id: "af_bella", label: "Bella (American, female)" },
+  { id: "af_nicole", label: "Nicole (American, female)" },
+  { id: "am_adam", label: "Adam (American, male)" },
+  { id: "am_michael", label: "Michael (American, male)" },
+];
 
 export type VideoQuality = "best" | "1080p" | "720p";
 
@@ -121,6 +132,8 @@ export const api = {
     invoke<void>("set_position", { entryId, positionMs }),
   translateSubtitles: (entryId: string, target: string) =>
     invoke<string[]>("translate_subtitles", { entryId, target }),
+  /** Reads text aloud; resolves to a WAV file. The first call downloads the speech model (~150 MB). */
+  speak: (text: string, speed: number) => invoke<ArrayBuffer>("speak", { text, speed }),
   exportSubtitles: (entryId: string, path: string) =>
     invoke<void>("export_subtitles", { entryId, path }),
   getSettings: () => invoke<Settings>("get_settings"),

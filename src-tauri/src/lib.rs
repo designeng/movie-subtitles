@@ -7,6 +7,7 @@ mod settings;
 mod subtitles;
 mod tools;
 mod translate;
+mod tts;
 mod video;
 
 use std::path::PathBuf;
@@ -25,6 +26,7 @@ pub struct AppState {
     pub subtitles: RwLock<Arc<subtitles::Registry>>,
     /// Cancels the download in progress, if any.
     pub cancel_download: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    pub tts: tts::Tts,
 }
 
 impl AppState {
@@ -36,6 +38,7 @@ impl AppState {
             subtitles: RwLock::new(Arc::new(subtitles::Registry::from_settings(&settings))),
             settings: Mutex::new(settings),
             cancel_download: Mutex::new(None),
+            tts: tts::Tts::default(),
             data_dir,
         }
     }
@@ -85,6 +88,7 @@ pub fn run() {
             commands::set_offset,
             commands::set_position,
             commands::translate_subtitles,
+            commands::speak,
             commands::export_subtitles,
             commands::get_settings,
             commands::save_settings,

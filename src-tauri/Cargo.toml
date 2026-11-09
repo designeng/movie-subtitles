@@ -31,6 +31,7 @@ encoding_rs = "0.8"
 sha2 = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-notification = "2"
+sherpa-onnx = "2.0.1"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

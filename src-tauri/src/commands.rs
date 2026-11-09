@@ -300,6 +300,19 @@ pub fn set_position(state: State<'_, AppState>, entry_id: String, position_ms: u
     Ok(())
 }
 
+/// Reads a subtitle line aloud with the selected voice; returns a WAV file.
+/// The first call downloads the speech model (~90 MB).
+#[tauri::command]
+pub async fn speak(
+    state: State<'_, AppState>,
+    text: String,
+    speed: f32,
+) -> Result<tauri::ipc::Response> {
+    let voice = state.settings.lock().unwrap().tts_voice.clone();
+    let wav = state.tts.synthesize(&state.data_dir, &text, &voice, speed).await?;
+    Ok(tauri::ipc::Response::new(wav))
+}
+
 /// Translates the entry's subtitles line by line; results are cached on disk
 /// next to the subtitle file and invalidated when subtitles change.
 #[tauri::command]

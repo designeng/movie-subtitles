@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { open } from "@tauri-apps/plugin-dialog";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { api, type Cue, type LibraryEntry, type SubtitleCandidate, type SubtitleMode } from "../api";
 import { cueIndexAt, formatTime } from "../subtitles";
 
@@ -18,6 +18,8 @@ const emit = defineEmits<{
   loaded: [cues: Cue[]];
   removed: [entry: LibraryEntry];
   seek: [ms: number];
+  /** A line is about to be read aloud: the video should stop talking over it. */
+  speak: [];
   setOffset: [ms: number];
   translated: [lines: string[], target: string];
 }>();
@@ -45,6 +47,8 @@ watch(
     error.value = "";
     providerErrors.value = [];
     link.value = "";
+    stopSpeaking();
+    speakError.value = "";
     tab.value = props.cues.length ? "lines" : "search";
     init();
   },
@@ -225,6 +229,58 @@ async function syncHere(cue: Cue, index: number) {
   list.value?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: "center" });
 }
 
+// --- Reading lines aloud ---------------------------------------------------
+
+/** Slower speech, to make out the words. */
+const slow = ref(localStorage.getItem("ttsSlow") === "1");
+watch(slow, (on) => localStorage.setItem("ttsSlow", on ? "1" : "0"));
+
+/** The line being generated or played. */
+const speakingIndex = ref<number | null>(null);
+/** The audio of that line is still being generated (the first one also downloads the model). */
+const speakLoading = ref(false);
+const speakError = ref("");
+let speakSeq = 0;
+let audio: HTMLAudioElement | null = null;
+let audioUrl = "";
+
+function stopSpeaking() {
+  speakSeq++; // drops a generation still in flight
+  audio?.pause();
+  audio = null;
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioUrl = "";
+  speakingIndex.value = null;
+  speakLoading.value = false;
+}
+onBeforeUnmount(stopSpeaking);
+
+/** Reads the line aloud; clicking the same line again stops it. */
+async function speak(cue: Cue, index: number) {
+  const wasSpeaking = speakingIndex.value === index;
+  stopSpeaking();
+  if (wasSpeaking) return;
+
+  const seq = speakSeq;
+  speakingIndex.value = index;
+  speakLoading.value = true;
+  speakError.value = "";
+  emit("speak");
+  try {
+    const wav = await api.speak(cue.text, slow.value ? 0.7 : 1);
+    if (seq !== speakSeq) return;
+    audioUrl = URL.createObjectURL(new Blob([wav], { type: "audio/wav" }));
+    audio = new Audio(audioUrl);
+    audio.onended = () => seq === speakSeq && stopSpeaking();
+    speakLoading.value = false;
+    await audio.play();
+  } catch (e) {
+    if (seq !== speakSeq) return;
+    speakError.value = String(e);
+    stopSpeaking();
+  }
+}
+
 function onLineClick(e: MouseEvent, cue: Cue, index: number) {
   if (e.shiftKey && (e.metaKey || e.ctrlKey)) syncHere(cue, index);
   else emit("seek", cue.startMs + props.offsetMs);
@@ -313,11 +369,15 @@ function onLineClick(e: MouseEvent, cue: Cue, index: number) {
         <label class="muted follow" title="Show ⏱ buttons to snap the subtitles to a line">
           <input v-model="syncMode" type="checkbox" /> sync
         </label>
+        <label class="muted follow" title="Read lines aloud slowly">
+          <input v-model="slow" type="checkbox" /> slow
+        </label>
       </div>
       <p class="muted tip">
-        Click a line to jump to it. To sync, find the line being spoken now and press ⏱
-        (enable “sync”) or ⇧⌘-click it — the subtitles shift to that line.
+        Click a line to jump to it. Press 🔊 to hear it read clearly. To sync, find the line being
+        spoken now and press ⏱ (enable “sync”) or ⇧⌘-click it — the subtitles shift to that line.
       </p>
+      <p v-if="speakError" class="error">{{ speakError }}</p>
       <ol ref="list">
         <li
           v-for="{ cue, index } in shown"
@@ -332,6 +392,19 @@ function onLineClick(e: MouseEvent, cue: Cue, index: number) {
             <template v-if="showOriginal(index)">{{ cue.text }}</template>
             <span v-if="showTranslation(index)" class="tr">{{ translations?.[index] }}</span>
           </span>
+          <button
+            class="ghost"
+            :title="
+              speakingIndex === index
+                ? speakLoading
+                  ? 'Preparing speech… (the first time this downloads the speech model, ~150 MB)'
+                  : 'Stop'
+                : 'Read this line aloud'
+            "
+            @click.stop="speak(cue, index)"
+          >
+            {{ speakingIndex === index ? (speakLoading ? "…" : "⏹") : "🔊" }}
+          </button>
           <button
             v-if="syncMode"
             class="ghost"

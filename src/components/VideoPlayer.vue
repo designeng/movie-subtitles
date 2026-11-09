@@ -146,6 +146,9 @@ defineExpose({
   seekBy(ms: number) {
     if (video.value) video.value.currentTime = Math.max(0, video.value.currentTime + ms / 1000);
   },
+  pause() {
+    video.value?.pause();
+  },
   togglePlay() {
     const v = video.value;
     if (v) v.paused ? v.play() : v.pause();

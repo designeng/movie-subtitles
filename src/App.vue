@@ -324,6 +324,7 @@ function onKey(e: KeyboardEvent) {
         @loaded="onSubtitlesLoaded"
         @removed="onSubtitlesRemoved"
         @seek="player?.seek($event)"
+        @speak="player?.pause()"
         @set-offset="offsetMs = $event"
         @translated="onTranslated"
       />

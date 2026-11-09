@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, type Settings } from "../api";
+import { api, TTS_VOICES, type Settings } from "../api";
 
 const props = defineProps<{ settings: Settings }>();
 const emit = defineEmits<{ close: []; saved: [settings: Settings] }>();
@@ -107,6 +107,19 @@ async function save() {
           </select>
         </label>
         <p class="muted hint">A 2-hour movie in 4K can take 10 GB or more. Applies to new downloads.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Read lines aloud</legend>
+        <label>
+          Voice
+          <select v-model="form.ttsVoice">
+            <option v-for="v in TTS_VOICES" :key="v.id" :value="v.id">{{ v.label }}</option>
+          </select>
+        </label>
+        <p class="muted hint">
+          The 🔊 button in the Lines tab speaks a line in clear English, offline. The first use downloads
+          the speech model (~150 MB).
+        </p>
       </fieldset>
       <label class="check">
         <input v-model="form.showFilesInfo" type="checkbox" />
